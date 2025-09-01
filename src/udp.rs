@@ -6,9 +6,12 @@ use crate::raw as r;
 #[cfg(windows)]
 use std::os::windows::io::AsRawSocket;
 
+/// High-performance UDP socket with low-latency optimizations
+#[derive(Debug)]
 pub struct Udp { inner: StdUdpSocket }
 
 impl Udp {
+    /// Bind UDP socket to address with low-latency configuration
     pub fn bind(addr: SocketAddr, cfg: &NetConfig) -> io::Result<Self> {
         // Use standard library binding for simplicity and compatibility
         let std = StdUdpSocket::bind(addr)?;
@@ -37,20 +40,21 @@ impl Udp {
     /// Bind dual-stack on IPv6 any with optional v6only=false (Windows often defaults to true)
     pub fn bind_dual_stack(port: u16, cfg: &NetConfig) -> io::Result<Self> {
         let any6: SocketAddr = "[::]:0".parse().unwrap();
-        let (domain, mut sa, len) = r::to_sockaddr(any6);
+        let (_domain, mut sa, len) = r::to_sockaddr(any6);
         if let r::SockAddr::V6(ref mut s6) = sa { s6.sin6_port = (port as u16).to_be(); }
         let os = r::socket(r::Domain::Ipv6, r::Type::Dgram, r::Protocol::Udp)?;
         r::set_nonblocking(os, true)?;
         apply_low_latency(os, r::Domain::Ipv6, r::Type::Dgram, cfg)?;
         r::set_ipv6_only(os, cfg.ipv6_only.unwrap_or(false))?;
         unsafe { r::bind_raw(os, &sa, len)?; }
-        let std = unsafe { r::udp_from_os(os) };
+        let std = r::udp_from_os(os);
         Ok(Self { inner: std })
     }
 
+    /// Get reference to underlying standard library UDP socket
     pub fn socket(&self) -> &StdUdpSocket { &self.inner }
 
-    /// Batch receive: on Linux use recvmmsg if available; otherwise recv_from loop.
+    /// Batch receive: on Linux use recvmmsg if available; otherwise recv_from loop
     pub fn recv_batch(&self, bufs: &mut [Vec<u8>], addrs: &mut [SocketAddr]) -> io::Result<usize> {
         cfg_if::cfg_if! {
             if #[cfg(any(target_os = "linux", target_os = "android"))] {
@@ -69,9 +73,10 @@ impl Udp {
         }
     }
 
+    /// Send data to specific address
     pub fn send_to(&self, buf: &[u8], addr: SocketAddr) -> io::Result<usize> { self.inner.send_to(buf, addr) }
 
-    /// Send a batch of packets; returns the number of packets successfully sent.
+    /// Send a batch of packets; returns the number of packets successfully sent
     pub fn send_batch(&self, packets: &[( &[u8], SocketAddr )]) -> io::Result<usize> {
         let mut sent = 0;
         for (buf, addr) in packets {

@@ -27,7 +27,7 @@ use std::sync::{Arc, Mutex};
 /// // Return buffer to pool when done
 /// pool.release(buffer);
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BufferPool {
     /// Internal storage for available buffers
     buffers: Arc<Mutex<VecDeque<Vec<u8>>>>,
