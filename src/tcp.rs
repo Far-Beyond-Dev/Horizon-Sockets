@@ -205,14 +205,9 @@ impl TcpListenerBuilder {
     /// Binds the listener to a specific address
     ///
     /// # Arguments
-    /// * `addr` - Address to bind to (can be string or SocketAddr)
-    pub fn bind<A>(mut self, addr: A) -> io::Result<Self>
-    where
-        A: std::str::FromStr<Err = std::net::AddrParseError>,
-    {
-        self.addr = Some(addr.from_str().map_err(|e| {
-            io::Error::new(io::ErrorKind::InvalidInput, format!("Invalid address: {}", e))
-        })?);
+    /// * `addr` - Address to bind to (can be &str or SocketAddr)
+    pub fn bind(mut self, addr: impl Into<SocketAddr>) -> io::Result<Self> {
+        self.addr = Some(addr.into());
         Ok(self)
     }
 
@@ -391,7 +386,7 @@ impl Default for TcpListenerBuilder {
 ///     .build()?;
 /// # Ok::<(), std::io::Error>(())
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TcpStreamBuilder {
     config: NetConfig,
     std_stream: Option<StdTcpStream>,

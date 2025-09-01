@@ -68,7 +68,7 @@ use std::net::{SocketAddr, TcpStream as StdTcpStream};
 ///
 /// The builder is lightweight and designed to be short-lived. It stores configuration
 /// parameters and builds the final socket only when a terminal method is called.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct SocketBuilder {
     config: NetConfig,
     addr: Option<SocketAddr>,
@@ -110,9 +110,9 @@ impl SocketBuilder {
     /// ```
     pub fn bind<A>(mut self, addr: A) -> io::Result<Self>
     where
-        A: std::str::FromStr<Err = std::net::AddrParseError>,
+        A: AsRef<str>,
     {
-        self.addr = Some(addr.from_str().map_err(|e| {
+        self.addr = Some(addr.as_ref().parse().map_err(|e| {
             io::Error::new(io::ErrorKind::InvalidInput, format!("Invalid address: {}", e))
         })?);
         Ok(self)

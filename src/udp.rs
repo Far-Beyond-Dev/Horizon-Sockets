@@ -194,13 +194,8 @@ impl UdpBuilder {
     ///
     /// # Arguments
     /// * `addr` - Address to bind to (can be string or SocketAddr)
-    pub fn bind<A>(mut self, addr: A) -> io::Result<Self>
-    where
-        A: std::str::FromStr<Err = std::net::AddrParseError>,
-    {
-        self.addr = Some(addr.from_str().map_err(|e| {
-            io::Error::new(io::ErrorKind::InvalidInput, format!("Invalid address: {}", e))
-        })?);
+    pub fn bind(mut self, addr: impl Into<SocketAddr>) -> io::Result<Self> {
+        self.addr = Some(addr.into());
         Ok(self)
     }
 
