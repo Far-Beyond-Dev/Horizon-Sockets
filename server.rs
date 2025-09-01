@@ -272,7 +272,7 @@ impl GameServer {
                 core_count, num_acceptors
         );
 
-        // On Windows, always create a single listener and spawn multiple acceptor tasks
+        // On Windows, always create a single listener and use it for all acceptor tasks
         #[cfg(target_os = "windows")]
         let listeners = {
             let mut builder = SocketBuilder::new()
@@ -282,17 +282,15 @@ impl GameServer {
                 .map_err(|e| ServerError::Network(format!("SocketBuilder backlog failed: {e}")))?;
             let listener = builder.tcp_listener()
                 .map_err(|e| ServerError::Network(format!("TcpListener creation failed: {e}")))?;
-            let std_listener = listener.as_std().try_clone()
-                .map_err(|e| ServerError::Network(format!("Failed to clone std TcpListener: {e}")))?;
+            let std_listener = listener.as_std();
             std_listener.set_nonblocking(true).ok();
-            let tokio_listener = tokio::net::TcpListener::from_std(std_listener)
+            let tokio_listener = tokio::net::TcpListener::from_std(std_listener.try_clone()
+                .map_err(|e| ServerError::Network(format!("Failed to clone std TcpListener: {e}")))?)
                 .map_err(|e| ServerError::Network(format!("Tokio listener creation failed: {e}")))?;
-            // Instead of multiple listeners, create a Vec with the same listener repeated
+            // Only one listener, used for all acceptor tasks
             let mut v = Vec::new();
-            for i in 0..num_acceptors {
-                v.push(tokio_listener.clone());
-                trace!("✅ (Windows) Acceptor {} using shared listener on {}", i, self.config.bind_address);
-            }
+            v.push(tokio_listener);
+            trace!("✅ (Windows) Single listener created on {}", self.config.bind_address);
             v
         };
 
