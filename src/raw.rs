@@ -92,7 +92,7 @@ cfg_if::cfg_if! {
         // Windows
         use std::sync::Once;
         use windows_sys::Win32::Networking::WinSock::*;
-        use std::os::windows::io::{RawSocket, FromRawSocket, AsRawSocket};
+        use std::os::windows::io::{RawSocket, FromRawSocket};
         pub type OsSocket = RawSocket; // SOCKET
 
         static START: Once = Once::new();
