@@ -160,7 +160,359 @@ pub struct TcpStream {
     inner: StdTcpStream,
 }
 
+/// Builder for creating TCP listeners with convenient method chaining
+///
+/// This builder provides an interface for creating TCP listeners
+/// with performance optimizations. It allows chainable method calls for
+/// easy configuration while maintaining all the high-performance features
+/// of Horizon Sockets.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use horizon_sockets::tcp::TcpListenerBuilder;
+///
+/// // Simple TCP listener
+/// let listener = TcpListenerBuilder::new()
+///     .bind("127.0.0.1:8080")?
+///     .build()?;
+///
+/// // High-performance TCP listener
+/// let listener = TcpListenerBuilder::new()
+///     .bind("0.0.0.0:8080")?
+///     .backlog(2048)?
+///     .nodelay(true)?
+///     .buffer_size(8 * 1024 * 1024)? // 8MB buffers
+///     .low_latency()?
+///     .build()?;
+/// # Ok::<(), std::io::Error>(())
+/// ```
+#[derive(Debug, Clone)]
+pub struct TcpListenerBuilder {
+    config: NetConfig,
+    addr: Option<SocketAddr>,
+}
+
+impl TcpListenerBuilder {
+    /// Creates a new TCP listener builder with default configuration
+    pub fn new() -> Self {
+        Self {
+            config: NetConfig::default(),
+            addr: None,
+        }
+    }
+
+    /// Binds the listener to a specific address
+    ///
+    /// # Arguments
+    /// * `addr` - Address to bind to (can be string or SocketAddr)
+    pub fn bind<A>(mut self, addr: A) -> io::Result<Self>
+    where
+        A: std::str::FromStr<Err = std::net::AddrParseError>,
+    {
+        self.addr = Some(addr.from_str().map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidInput, format!("Invalid address: {}", e))
+        })?);
+        Ok(self)
+    }
+
+    /// Enables or disables TCP_NODELAY (Nagle's algorithm)
+    pub fn nodelay(mut self, enable: bool) -> io::Result<Self> {
+        self.config.tcp_nodelay = enable;
+        Ok(self)
+    }
+
+    /// Enables or disables TCP_QUICKACK (Linux only)
+    pub fn quickack(mut self, enable: bool) -> io::Result<Self> {
+        self.config.tcp_quickack = enable;
+        Ok(self)
+    }
+
+    /// Enables SO_REUSEPORT for load balancing across threads
+    pub fn reuse_port(mut self, enable: bool) -> io::Result<Self> {
+        self.config.reuse_port = enable;
+        Ok(self)
+    }
+
+    /// Sets the listen backlog size
+    pub fn backlog(mut self, backlog: i32) -> io::Result<Self> {
+        self.config.tcp_backlog = Some(backlog);
+        Ok(self)
+    }
+
+    /// Sets socket buffer sizes for both send and receive
+    pub fn buffer_size(mut self, size: usize) -> io::Result<Self> {
+        self.config.recv_buf = Some(size);
+        self.config.send_buf = Some(size);
+        Ok(self)
+    }
+
+    /// Sets receive buffer size
+    pub fn recv_buffer_size(mut self, size: usize) -> io::Result<Self> {
+        self.config.recv_buf = Some(size);
+        Ok(self)
+    }
+
+    /// Sets send buffer size
+    pub fn send_buffer_size(mut self, size: usize) -> io::Result<Self> {
+        self.config.send_buf = Some(size);
+        Ok(self)
+    }
+
+    /// Sets Type of Service / DSCP marking for traffic prioritization
+    pub fn tos(mut self, tos: u32) -> io::Result<Self> {
+        self.config.tos = Some(tos);
+        Ok(self)
+    }
+
+    /// Configures IPv6-only mode (true) or dual-stack mode (false)
+    pub fn ipv6_only(mut self, only: bool) -> io::Result<Self> {
+        self.config.ipv6_only = Some(only);
+        Ok(self)
+    }
+
+    /// Sets IPv6 hop limit
+    pub fn hop_limit(mut self, limit: i32) -> io::Result<Self> {
+        self.config.hop_limit = Some(limit);
+        Ok(self)
+    }
+
+    /// Sets polling timeout for event operations
+    pub fn poll_timeout(mut self, timeout_ms: u64) -> io::Result<Self> {
+        self.config.poll_timeout_ms = Some(timeout_ms);
+        Ok(self)
+    }
+
+    /// Applies low-latency preset configuration
+    ///
+    /// This configures the listener for minimal latency:
+    /// - Enables TCP_NODELAY and TCP_QUICKACK
+    /// - Uses smaller buffers (256KB)
+    /// - Sets smaller backlog for faster processing
+    /// - Optimizes polling timeout (1ms)
+    pub fn low_latency(mut self) -> io::Result<Self> {
+        let low_latency_config = NetConfig::low_latency();
+        self.config.tcp_nodelay = low_latency_config.tcp_nodelay;
+        self.config.tcp_quickack = low_latency_config.tcp_quickack;
+        self.config.recv_buf = low_latency_config.recv_buf;
+        self.config.send_buf = low_latency_config.send_buf;
+        self.config.tcp_backlog = low_latency_config.tcp_backlog;
+        self.config.tos = low_latency_config.tos;
+        self.config.poll_timeout_ms = low_latency_config.poll_timeout_ms;
+        Ok(self)
+    }
+
+    /// Applies high-throughput preset configuration
+    ///
+    /// This configures the listener for maximum throughput:
+    /// - Uses large buffers (16MB)
+    /// - Large backlog (2048) for connection bursts
+    /// - Allows Nagle's algorithm for efficiency
+    /// - Sets high-throughput DSCP marking
+    pub fn high_throughput(mut self) -> io::Result<Self> {
+        let high_throughput_config = NetConfig::high_throughput();
+        self.config.tcp_nodelay = high_throughput_config.tcp_nodelay;
+        self.config.tcp_quickack = high_throughput_config.tcp_quickack;
+        self.config.recv_buf = high_throughput_config.recv_buf;
+        self.config.send_buf = high_throughput_config.send_buf;
+        self.config.tcp_backlog = high_throughput_config.tcp_backlog;
+        self.config.tos = high_throughput_config.tos;
+        self.config.poll_timeout_ms = high_throughput_config.poll_timeout_ms;
+        Ok(self)
+    }
+
+    /// Applies power-efficient preset configuration
+    ///
+    /// This configures the listener for minimal CPU usage:
+    /// - Uses moderate buffers (512KB)
+    /// - Smaller backlog to reduce memory usage
+    /// - Longer polling timeouts to reduce wakeups
+    /// - Simplified socket management
+    pub fn power_efficient(mut self) -> io::Result<Self> {
+        let power_config = NetConfig::power_efficient();
+        self.config.tcp_nodelay = power_config.tcp_nodelay;
+        self.config.tcp_quickack = power_config.tcp_quickack;
+        self.config.recv_buf = power_config.recv_buf;
+        self.config.send_buf = power_config.send_buf;
+        self.config.tcp_backlog = power_config.tcp_backlog;
+        self.config.reuse_port = power_config.reuse_port;
+        self.config.poll_timeout_ms = power_config.poll_timeout_ms;
+        Ok(self)
+    }
+
+    /// Builds the TCP listener with the configured settings
+    ///
+    /// # Returns
+    /// 
+    /// A configured `TcpListener` ready for accepting connections
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No address was specified with `bind()`
+    /// - The address is invalid or unavailable
+    /// - Listener creation or configuration fails
+    pub fn build(self) -> io::Result<TcpListener> {
+        if let Some(addr) = self.addr {
+            TcpListener::bind(addr, &self.config)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Must specify address with bind()",
+            ))
+        }
+    }
+}
+
+impl Default for TcpListenerBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Builder for creating TCP streams with convenient method chaining
+///
+/// This builder provides an interface for creating TCP streams
+/// with performance optimizations. It's primarily used for configuring
+/// streams after connection establishment.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use horizon_sockets::tcp::TcpStreamBuilder;
+/// use std::net::TcpStream as StdTcpStream;
+///
+/// // Configure an existing stream
+/// let std_stream = StdTcpStream::connect("127.0.0.1:8080")?;
+/// let stream = TcpStreamBuilder::new()
+///     .nodelay(true)?
+///     .buffer_size(1024 * 1024)?
+///     .from_std(std_stream)?
+///     .build()?;
+/// # Ok::<(), std::io::Error>(())
+/// ```
+#[derive(Debug, Clone)]
+pub struct TcpStreamBuilder {
+    config: NetConfig,
+    std_stream: Option<StdTcpStream>,
+}
+
+impl TcpStreamBuilder {
+    /// Creates a new TCP stream builder with default configuration
+    pub fn new() -> Self {
+        Self {
+            config: NetConfig::default(),
+            std_stream: None,
+        }
+    }
+
+    /// Configures the builder with an existing standard library TCP stream
+    pub fn from_std(mut self, stream: StdTcpStream) -> io::Result<Self> {
+        self.std_stream = Some(stream);
+        Ok(self)
+    }
+
+    /// Enables or disables TCP_NODELAY (Nagle's algorithm)
+    pub fn nodelay(mut self, enable: bool) -> io::Result<Self> {
+        self.config.tcp_nodelay = enable;
+        Ok(self)
+    }
+
+    /// Enables or disables TCP_QUICKACK (Linux only)
+    pub fn quickack(mut self, enable: bool) -> io::Result<Self> {
+        self.config.tcp_quickack = enable;
+        Ok(self)
+    }
+
+    /// Sets socket buffer sizes for both send and receive
+    pub fn buffer_size(mut self, size: usize) -> io::Result<Self> {
+        self.config.recv_buf = Some(size);
+        self.config.send_buf = Some(size);
+        Ok(self)
+    }
+
+    /// Sets receive buffer size
+    pub fn recv_buffer_size(mut self, size: usize) -> io::Result<Self> {
+        self.config.recv_buf = Some(size);
+        Ok(self)
+    }
+
+    /// Sets send buffer size
+    pub fn send_buffer_size(mut self, size: usize) -> io::Result<Self> {
+        self.config.send_buf = Some(size);
+        Ok(self)
+    }
+
+    /// Applies low-latency preset configuration
+    pub fn low_latency(mut self) -> io::Result<Self> {
+        let low_latency_config = NetConfig::low_latency();
+        self.config.tcp_nodelay = low_latency_config.tcp_nodelay;
+        self.config.tcp_quickack = low_latency_config.tcp_quickack;
+        self.config.recv_buf = low_latency_config.recv_buf;
+        self.config.send_buf = low_latency_config.send_buf;
+        Ok(self)
+    }
+
+    /// Applies high-throughput preset configuration
+    pub fn high_throughput(mut self) -> io::Result<Self> {
+        let high_throughput_config = NetConfig::high_throughput();
+        self.config.tcp_nodelay = high_throughput_config.tcp_nodelay;
+        self.config.tcp_quickack = high_throughput_config.tcp_quickack;
+        self.config.recv_buf = high_throughput_config.recv_buf;
+        self.config.send_buf = high_throughput_config.send_buf;
+        Ok(self)
+    }
+
+    /// Builds the TCP stream with the configured settings
+    ///
+    /// # Returns
+    /// 
+    /// A configured `TcpStream` ready for I/O operations
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No standard stream was provided with `from_std()`
+    /// - Stream configuration fails
+    pub fn build(self) -> io::Result<TcpStream> {
+        if let Some(std_stream) = self.std_stream {
+            TcpStream::from_std(std_stream, &self.config)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Must provide standard stream with from_std()",
+            ))
+        }
+    }
+}
+
+impl Default for TcpStreamBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TcpListener {
+    /// Creates a new TCP listener builder
+    ///
+    /// This provides a convenient way to create TCP listeners with method chaining,
+    /// and Horizon Sockets' performance optimizations.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use horizon_sockets::tcp::TcpListener;
+    ///
+    /// let listener = TcpListener::builder()
+    ///     .bind("0.0.0.0:8080")?
+    ///     .backlog(1024)?
+    ///     .low_latency()?
+    ///     .build()?;
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
+    pub fn builder() -> TcpListenerBuilder {
+        TcpListenerBuilder::new()
+    }
     /// Binds a TCP listener to the specified address with performance optimizations
     ///
     /// This method creates a TCP listener socket with all performance optimizations
@@ -294,6 +646,28 @@ impl TcpListener {
 }
 
 impl TcpStream {
+    /// Creates a new TCP stream builder
+    ///
+    /// This provides a convenient way to configure TCP streams with method chaining,
+    /// with Horizon Sockets' performance optimizations.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use horizon_sockets::tcp::TcpStream;
+    /// use std::net::TcpStream as StdTcpStream;
+    ///
+    /// let std_stream = StdTcpStream::connect("127.0.0.1:8080")?;
+    /// let stream = TcpStream::builder()
+    ///     .from_std(std_stream)?
+    ///     .nodelay(true)?
+    ///     .low_latency()?
+    ///     .build()?;
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
+    pub fn builder() -> TcpStreamBuilder {
+        TcpStreamBuilder::new()
+    }
     /// Creates a TCP stream from a standard library stream with optimizations applied
     ///
     /// This method takes an existing `std::net::TcpStream` and applies the

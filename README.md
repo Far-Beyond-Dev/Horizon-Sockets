@@ -19,11 +19,17 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-Horizon-Socket-Low = { path = "path/to/Horizon-Sockets" }
+horizon_sockets = { path = "path/to/Horizon-Sockets" }
 
 # For io_uring backend (Linux) or enhanced IOCP (Windows)
 # horizon_sockets = { path = "path/to/Horizon-Sockets", features = ["monoio-runtime"] }
 ```
+
+## Usage Examples
+
+### Builder Pattern
+
+The library provides convenient builder patterns:
 
 ### Basic UDP Server
 

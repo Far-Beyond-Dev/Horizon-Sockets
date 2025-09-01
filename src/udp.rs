@@ -141,7 +141,228 @@ pub struct Udp {
     inner: StdUdpSocket,
 }
 
+/// Builder for creating UDP sockets with convenient method chaining
+///
+/// This builder provides an interface for creating UDP sockets
+/// with performance optimizations. It allows chainable method calls for
+/// easy configuration while maintaining all the high-performance features
+/// of Horizon Sockets.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use horizon_sockets::udp::UdpBuilder;
+///
+/// // Simple UDP socket
+/// let socket = UdpBuilder::new()
+///     .bind("127.0.0.1:8080")?
+///     .build()?;
+///
+/// // High-performance UDP socket with optimizations
+/// let socket = UdpBuilder::new()
+///     .bind("0.0.0.0:8080")?
+///     .reuse_port(true)?
+///     .buffer_size(8 * 1024 * 1024)? // 8MB buffers
+///     .busy_poll(50)? // 50μs busy polling
+///     .low_latency()?
+///     .build()?;
+///
+/// // Dual-stack IPv6 socket
+/// let socket = UdpBuilder::new()
+///     .bind_dual_stack(8080)?
+///     .build()?;
+/// # Ok::<(), std::io::Error>(())
+/// ```
+#[derive(Debug, Clone)]
+pub struct UdpBuilder {
+    config: NetConfig,
+    addr: Option<SocketAddr>,
+    dual_stack_port: Option<u16>,
+}
+
+impl UdpBuilder {
+    /// Creates a new UDP socket builder with default configuration
+    pub fn new() -> Self {
+        Self {
+            config: NetConfig::default(),
+            addr: None,
+            dual_stack_port: None,
+        }
+    }
+
+    /// Binds the socket to a specific address
+    ///
+    /// # Arguments
+    /// * `addr` - Address to bind to (can be string or SocketAddr)
+    pub fn bind<A>(mut self, addr: A) -> io::Result<Self>
+    where
+        A: std::str::FromStr<Err = std::net::AddrParseError>,
+    {
+        self.addr = Some(addr.from_str().map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidInput, format!("Invalid address: {}", e))
+        })?);
+        Ok(self)
+    }
+
+    /// Binds to a dual-stack IPv6 socket (accepts both IPv4 and IPv6)
+    pub fn bind_dual_stack(mut self, port: u16) -> io::Result<Self> {
+        self.dual_stack_port = Some(port);
+        self.config.ipv6_only = Some(false);
+        Ok(self)
+    }
+
+    /// Enables SO_REUSEPORT for load balancing across threads
+    pub fn reuse_port(mut self, enable: bool) -> io::Result<Self> {
+        self.config.reuse_port = enable;
+        Ok(self)
+    }
+
+    /// Sets socket buffer sizes for both send and receive
+    pub fn buffer_size(mut self, size: usize) -> io::Result<Self> {
+        self.config.recv_buf = Some(size);
+        self.config.send_buf = Some(size);
+        Ok(self)
+    }
+
+    /// Sets receive buffer size
+    pub fn recv_buffer_size(mut self, size: usize) -> io::Result<Self> {
+        self.config.recv_buf = Some(size);
+        Ok(self)
+    }
+
+    /// Sets send buffer size
+    pub fn send_buffer_size(mut self, size: usize) -> io::Result<Self> {
+        self.config.send_buf = Some(size);
+        Ok(self)
+    }
+
+    /// Enables busy polling for the specified number of microseconds (Linux only)
+    pub fn busy_poll(mut self, microseconds: u32) -> io::Result<Self> {
+        self.config.busy_poll = Some(microseconds);
+        Ok(self)
+    }
+
+    /// Sets Type of Service / DSCP marking for traffic prioritization
+    pub fn tos(mut self, tos: u32) -> io::Result<Self> {
+        self.config.tos = Some(tos);
+        Ok(self)
+    }
+
+    /// Configures IPv6-only mode (true) or dual-stack mode (false)
+    pub fn ipv6_only(mut self, only: bool) -> io::Result<Self> {
+        self.config.ipv6_only = Some(only);
+        Ok(self)
+    }
+
+    /// Sets IPv6 hop limit
+    pub fn hop_limit(mut self, limit: i32) -> io::Result<Self> {
+        self.config.hop_limit = Some(limit);
+        Ok(self)
+    }
+
+    /// Applies low-latency preset configuration
+    ///
+    /// This configures the socket for minimal latency:
+    /// - Enables busy polling (50μs)
+    /// - Uses smaller buffers (256KB)
+    /// - Sets low-delay DSCP marking
+    /// - Optimizes polling timeout
+    pub fn low_latency(mut self) -> io::Result<Self> {
+        let low_latency_config = NetConfig::low_latency();
+        self.config.busy_poll = low_latency_config.busy_poll;
+        self.config.recv_buf = low_latency_config.recv_buf;
+        self.config.send_buf = low_latency_config.send_buf;
+        self.config.tos = low_latency_config.tos;
+        self.config.poll_timeout_ms = low_latency_config.poll_timeout_ms;
+        Ok(self)
+    }
+
+    /// Applies high-throughput preset configuration
+    ///
+    /// This configures the socket for maximum throughput:
+    /// - Uses large buffers (16MB)
+    /// - Disables busy polling
+    /// - Sets high-throughput DSCP marking
+    /// - Optimizes for bulk transfers
+    pub fn high_throughput(mut self) -> io::Result<Self> {
+        let high_throughput_config = NetConfig::high_throughput();
+        self.config.busy_poll = high_throughput_config.busy_poll;
+        self.config.recv_buf = high_throughput_config.recv_buf;
+        self.config.send_buf = high_throughput_config.send_buf;
+        self.config.tos = high_throughput_config.tos;
+        self.config.poll_timeout_ms = high_throughput_config.poll_timeout_ms;
+        Ok(self)
+    }
+
+    /// Applies power-efficient preset configuration
+    ///
+    /// This configures the socket for minimal CPU usage:
+    /// - Uses moderate buffers (512KB)
+    /// - Disables busy polling
+    /// - Uses longer polling timeouts
+    /// - Reduces CPU overhead
+    pub fn power_efficient(mut self) -> io::Result<Self> {
+        let power_config = NetConfig::power_efficient();
+        self.config.busy_poll = power_config.busy_poll;
+        self.config.recv_buf = power_config.recv_buf;
+        self.config.send_buf = power_config.send_buf;
+        self.config.reuse_port = power_config.reuse_port;
+        self.config.poll_timeout_ms = power_config.poll_timeout_ms;
+        Ok(self)
+    }
+
+    /// Builds the UDP socket with the configured settings
+    ///
+    /// # Returns
+    /// 
+    /// A configured `Udp` socket ready for use
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - No address was specified with `bind()` or `bind_dual_stack()`
+    /// - The address is invalid or unavailable
+    /// - Socket creation or configuration fails
+    pub fn build(self) -> io::Result<Udp> {
+        if let Some(port) = self.dual_stack_port {
+            Udp::bind_dual_stack(port, &self.config)
+        } else if let Some(addr) = self.addr {
+            Udp::bind(addr, &self.config)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Must specify address with bind() or bind_dual_stack()",
+            ))
+        }
+    }
+}
+
+impl Default for UdpBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Udp {
+    /// Creates a new UDP socket builder
+    ///
+    /// This provides a convenient way to create UDP sockets with method chaining,
+    /// while applying Horizon Sockets' performance optimizations.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use horizon_sockets::udp::Udp;
+    ///
+    /// let socket = Udp::builder()
+    ///     .bind("0.0.0.0:8080")?
+    ///     .low_latency()?
+    ///     .build()?;
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
+    pub fn builder() -> UdpBuilder {
+        UdpBuilder::new()
+    }
     /// Binds a UDP socket to the specified address with performance optimizations
     ///
     /// This method creates a UDP socket with all performance optimizations from the
