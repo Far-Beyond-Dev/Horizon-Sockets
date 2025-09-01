@@ -54,6 +54,19 @@ impl Udp {
     }
 
     pub fn send_to(&self, buf: &[u8], addr: SocketAddr) -> io::Result<usize> { self.inner.send_to(buf, addr) }
+
+    /// Send a batch of packets; returns the number of packets successfully sent.
+    pub fn send_batch(&self, packets: &[( &[u8], SocketAddr )]) -> io::Result<usize> {
+        let mut sent = 0;
+        for (buf, addr) in packets {
+            match self.send_to(buf, *addr) {
+                Ok(_) => sent += 1,
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => break,
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(sent)
+    }
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -111,4 +124,71 @@ unsafe fn recv_batch_linux(sock: &Udp, bufs: &mut [Vec<u8>], addrs: &mut [Socket
         addrs[i] = addr;
     }
     Ok(n)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::NetConfig;
+    use std::net::SocketAddr;
+    
+    #[test]
+    fn test_udp_bind() {
+        let mut config = NetConfig::default();
+        config.ipv6_only = None; // Let system decide
+        let result = Udp::bind("127.0.0.1:0".parse().unwrap(), &config);
+        if let Err(e) = &result {
+            eprintln!("UDP bind failed: {}", e);
+        }
+        assert!(result.is_ok());
+    }
+    
+    #[test] 
+    fn test_dual_stack_bind() {
+        let config = NetConfig::default();
+        let result = Udp::bind_dual_stack(0, &config);
+        // May fail on systems without IPv6 support
+        let _ = result;
+    }
+    
+    #[test]
+    fn test_send_to() {
+        let mut config = NetConfig::default();
+        config.ipv6_only = None;
+        let socket = Udp::bind("127.0.0.1:0".parse().unwrap(), &config).unwrap();
+        
+        // Send to a likely unused port - this should succeed (UDP is connectionless)
+        let result = socket.send_to(b"test", "127.0.0.1:9999".parse().unwrap());
+        assert!(result.is_ok());
+    }
+    
+    #[test]
+    fn test_recv_batch_empty() {
+        let mut config = NetConfig::default();
+        config.ipv6_only = None;
+        let socket = Udp::bind("127.0.0.1:0".parse().unwrap(), &config).unwrap();
+        
+        let mut bufs: Vec<Vec<u8>> = Vec::new();
+        let mut addrs: Vec<SocketAddr> = Vec::new();
+        
+        let result = socket.recv_batch(&mut bufs, &mut addrs);
+        assert_eq!(result.unwrap(), 0);
+    }
+    
+    #[test]
+    fn test_send_batch() {
+        let mut config = NetConfig::default();
+        config.ipv6_only = None;
+        let socket = Udp::bind("127.0.0.1:0".parse().unwrap(), &config).unwrap();
+        
+        let dest = "127.0.0.1:9999".parse().unwrap();
+        let packets = vec![
+            (b"packet1".as_slice(), dest),
+            (b"packet2".as_slice(), dest),
+        ];
+        
+        let result = socket.send_batch(&packets);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 2);
+    }
 }

@@ -14,7 +14,8 @@ impl TcpListener {
         apply_low_latency(os, domain, r::Type::Stream, cfg)?;
         if let r::Domain::Ipv6 = domain { if let Some(only) = cfg.ipv6_only { r::set_ipv6_only(os, only)?; } }
         unsafe { r::bind_raw(os, &sa, len)?; }
-        r::listen_raw(os, 1024)?;
+        let backlog = cfg.tcp_backlog.unwrap_or(1024);
+        r::listen_raw(os, backlog)?;
         let std = unsafe { r::tcp_listener_from_os(os) };
         Ok(Self { inner: std })
     }

@@ -20,13 +20,13 @@ Add to your `Cargo.toml`:
 Horizon-Socket-Low = { path = "path/to/Horizon-Sockets" }
 
 # For io_uring backend (Linux) or enhanced IOCP (Windows)
-# Horizon-Socket-Low = { path = "path/to/Horizon-Sockets", features = ["monoio-runtime"] }
+# horizon_sockets = { path = "path/to/Horizon-Sockets", features = ["monoio-runtime"] }
 ```
 
 ### Basic UDP Server
 
 ```rust
-use Horizon_Socket_Low::{NetConfig, udp::Udp};
+use horizon_sockets::{NetConfig, udp::Udp};
 use std::net::SocketAddr;
 
 fn main() -> std::io::Result<()> {
@@ -54,7 +54,7 @@ fn main() -> std::io::Result<()> {
 ### Basic TCP Server
 
 ```rust
-use Horizon_Socket_Low::{NetConfig, tcp::TcpListener};
+use horizon_sockets::{NetConfig, tcp::TcpListener};
 
 fn main() -> std::io::Result<()> {
     let config = NetConfig::default();
@@ -80,7 +80,7 @@ fn main() -> std::io::Result<()> {
 The `NetConfig` struct provides extensive tuning options:
 
 ```rust
-use Horizon_Socket_Low::NetConfig;
+use horizon_sockets::NetConfig;
 
 let config = NetConfig {
     // TCP optimizations
@@ -130,7 +130,7 @@ Uses `mio` for cross-platform async I/O:
 - macOS/BSD: kqueue
 
 ```rust
-use Horizon_Socket_Low::rt::Runtime;
+use horizon_sockets::rt::Runtime;
 use mio::{Token, Interest};
 
 let mut runtime = Runtime::new()?;
