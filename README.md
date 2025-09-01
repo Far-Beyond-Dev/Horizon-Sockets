@@ -348,16 +348,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 3. Make your changes with tests
 4. Submit a pull request
 
-## Changelog
-
-### v0.1.0
-- Initial release
-- Basic UDP and TCP socket interfaces
-- Cross-platform support (Linux, Windows, macOS)
-- Mio runtime backend
-- Configurable low-latency optimizations
-- Batch UDP operations with recvmmsg on Linux
-
 ## Roadmap
 
 - [ ] Complete monoio runtime implementation
