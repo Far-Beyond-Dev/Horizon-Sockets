@@ -1,15 +1,17 @@
 # Horizon-Sockets
 
-A high-performance, low-latency networking library for Rust designed for ultra-fast socket operations with configurable runtime backends.
+A high-performance, low-latency networking library for Rust designed for ultra-fast socket operations with configurable runtime backends. Features comprehensive documentation, extensive performance optimizations, and cross-platform support.
 
 ## Features
 
 - **Multiple Runtime Backends**: Choose between `mio` (default) or `monoio` for optimal performance on your platform
-- **Cross-Platform**: Full support for Linux, Windows, and other Unix-like systems
-- **Low-Latency Optimizations**: Built-in support for TCP_NODELAY, SO_BUSY_POLL, and other latency-reduction techniques
+- **Cross-Platform**: Full support for Linux, Windows, macOS, BSD, and other Unix-like systems
+- **Low-Latency Optimizations**: Built-in support for TCP_NODELAY, SO_BUSY_POLL, TCP_QUICKACK and other latency-reduction techniques
 - **Batch Operations**: High-performance batch UDP operations with `recvmmsg` on Linux
-- **Zero-Copy**: Minimal allocations with efficient buffer management
-- **Configurable**: Extensive tuning options through `NetConfig`
+- **Buffer Pool Management**: Efficient memory management with reusable buffer pools
+- **CPU Affinity Control**: Thread pinning utilities for consistent performance
+- **Comprehensive Documentation**: Extensive inline documentation with examples and performance notes
+- **Configurable**: Extensive tuning options through `NetConfig` with preset configurations
 
 ## Quick Start
 
@@ -77,7 +79,7 @@ fn main() -> std::io::Result<()> {
 
 ### NetConfig Options
 
-The `NetConfig` struct provides extensive tuning options:
+The `NetConfig` struct provides extensive tuning options with preset configurations for different use cases:
 
 ```rust
 use horizon_sockets::NetConfig;
@@ -102,22 +104,31 @@ let config = NetConfig {
 };
 ```
 
-### Default Configuration
+### Preset Configurations
 
-The default configuration is optimized for low latency:
+The library provides several preset configurations optimized for different scenarios:
 
+#### Default Configuration (Balanced)
 ```rust
-NetConfig {
-    tcp_nodelay: true,
-    tcp_quickack: true,
-    reuse_port: true,
-    busy_poll: None,
-    recv_buf: Some(1 << 20),  // 1MB
-    send_buf: Some(1 << 20),  // 1MB
-    tos: None,
-    ipv6_only: None,
-    hop_limit: None,
-}
+NetConfig::default() // Balanced performance with 4MB buffers
+```
+
+#### Low-Latency Configuration
+```rust
+NetConfig::low_latency() // Optimized for minimal latency
+// Features: 50μs busy polling, 256KB buffers, 1ms timeout
+```
+
+#### High-Throughput Configuration
+```rust
+NetConfig::high_throughput() // Optimized for maximum throughput
+// Features: 16MB buffers, disabled Nagle's algorithm, 2048 backlog
+```
+
+#### Power-Efficient Configuration
+```rust
+NetConfig::power_efficient() // Optimized for low CPU usage
+// Features: 512KB buffers, 100ms timeout, minimal optimizations
 ```
 
 ## Runtime Backends
@@ -223,57 +234,44 @@ let config = NetConfig {
 
 ### CPU Affinity
 
-Pin network threads to specific CPU cores for consistent performance:
+The library includes built-in CPU affinity utilities for consistent performance:
 
 ```rust
-#[cfg(unix)]
-fn pin_to_cpu(cpu: usize) -> std::io::Result<()> {
-    use libc::{cpu_set_t, CPU_SET, CPU_ZERO, sched_setaffinity};
-    
-    unsafe {
-        let mut set: cpu_set_t = std::mem::zeroed();
-        CPU_ZERO(&mut set);
-        CPU_SET(cpu, &mut set);
-        
-        if sched_setaffinity(0, std::mem::size_of::<cpu_set_t>(), &set) != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-    }
-    Ok(())
-}
+use horizon_sockets::affinity::{pin_to_cpu, pin_to_cpus, get_cpu_count, get_numa_topology};
 
-#[cfg(windows)]
-fn pin_to_cpu(cpu: usize) -> std::io::Result<()> {
-    use windows_sys::Win32::System::Threading::{SetThreadAffinityMask, GetCurrentThread};
-    
-    unsafe {
-        if SetThreadAffinityMask(GetCurrentThread(), 1usize << cpu) == 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-    }
-    Ok(())
-}
-
-// Usage
+// Pin thread to a specific CPU core
 pin_to_cpu(2)?; // Pin to CPU core 2
+
+// Pin thread to multiple CPU cores
+pin_to_cpus(&[2, 3, 4, 5])?; // Pin to cores 2-5
+
+// Get system information
+let cpu_count = get_cpu_count();
+let numa_topology = get_numa_topology();
+println!("System has {} CPUs across {} NUMA nodes", cpu_count, numa_topology.len());
 ```
 
 ### Buffer Management
 
-Pre-allocate buffers to avoid runtime allocations:
+The library includes a high-performance buffer pool for efficient memory management:
 
 ```rust
-// Pre-allocate buffer pool
-let mut buffer_pool: Vec<Vec<u8>> = (0..128)
-    .map(|_| vec![0u8; 2048])
-    .collect();
+use horizon_sockets::buffer_pool::BufferPool;
 
-// Reuse buffers across recv operations
+// Create a buffer pool with 64 buffers of 2KB each
+let pool = BufferPool::new(64, 2048);
+
+// Acquire buffers for batch operations
+let mut buffers = pool.acquire_batch(32);
+let mut addrs = vec![SocketAddr::from(([0,0,0,0], 0)); 32];
+
 loop {
-    let count = socket.recv_batch(&mut buffer_pool[..32], &mut addrs)?;
+    let count = socket.recv_batch(&mut buffers, &mut addrs)?;
     // Process packets...
     
-    // Buffers are automatically reused
+    // Return buffers to pool for reuse
+    pool.release_batch(buffers);
+    buffers = pool.acquire_batch(32);
 }
 ```
 
@@ -311,12 +309,14 @@ match socket.recv_batch(&mut bufs, &mut addrs) {
 
 ### Module Structure
 
-- `config`: Network configuration and tuning parameters
-- `raw`: Low-level socket operations and platform abstractions
-- `udp`: High-level UDP socket interface with batch operations
-- `tcp`: High-level TCP socket interface
-- `rt_mio`: Mio-based runtime implementation
-- `rt_monoio`: Monoio-based runtime implementation (minimal)
+- **`config`**: Network configuration and performance tuning parameters with preset configurations
+- **`raw`**: Low-level socket operations and platform abstractions for Unix and Windows
+- **`udp`**: High-level UDP socket interface with batch operations and comprehensive documentation
+- **`tcp`**: High-level TCP socket interface with low-latency optimizations
+- **`buffer_pool`**: Memory-efficient buffer pool for network operations with batch management
+- **`affinity`**: CPU affinity and thread pinning utilities with NUMA topology detection
+- **`rt_mio`**: Mio-based runtime implementation using epoll/kqueue/IOCP
+- **`rt_monoio`**: Monoio-based runtime implementation using io_uring/IOCP (under development)
 
 ### Platform Support
 
@@ -329,13 +329,15 @@ match socket.recv_batch(&mut bufs, &mut addrs) {
 
 ## Dependencies
 
-- `mio`: Cross-platform async I/O (default backend)
-- `monoio`: io_uring/IOCP backend (optional)
-- `libc`: Unix system calls
-- `windows-sys`: Windows system APIs
-- `bytemuck`: Safe transmutation
-- `cfg-if`: Conditional compilation
-- `slab`: Token allocation (mio backend)
+- **`mio`**: Cross-platform async I/O (default backend)
+- **`monoio`**: io_uring/IOCP backend (optional, under development)
+- **`libc`**: Unix system calls and socket operations
+- **`windows-sys`**: Windows system APIs and WinSock2
+- **`cfg-if`**: Conditional compilation for platform-specific code
+
+### Development Dependencies
+- Standard Rust toolchain
+- Platform-specific development tools (Linux kernel headers, Windows SDK)
 
 ## License
 
@@ -348,12 +350,46 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 3. Make your changes with tests
 4. Submit a pull request
 
+## Documentation
+
+The library features comprehensive documentation with:
+
+- **Module-level documentation** with examples and architecture overviews
+- **Function-level documentation** with usage examples and performance notes
+- **Platform-specific notes** detailing behavior differences
+- **Performance guidelines** and optimization recommendations
+- **Safety documentation** for unsafe operations
+
+## Testing
+
+Run the test suite with:
+
+```bash
+cargo test
+```
+
+For platform-specific tests:
+```bash
+# Linux-specific tests (recvmmsg, etc.)
+cargo test --features linux-tests
+
+# Windows-specific tests
+cargo test --features windows-tests
+```
+
 ## Roadmap
 
-- [ ] Complete monoio runtime implementation
-- [ ] Zero-copy send/receive operations
+### In Progress
+- [x] Comprehensive inline documentation
+- [x] CPU affinity utilities with NUMA support
+- [x] Buffer pool management
+- [x] Preset configuration system
+
+### Planned
+- [ ] Complete monoio runtime implementation with io_uring/IOCP
+- [ ] Zero-copy send/receive operations using advanced kernel features
 - [ ] DPDK integration for userspace networking
-- [ ] Advanced buffer pool management
-- [ ] Automatic NUMA topology detection
-- [ ] Real-time scheduling support
-- [ ] Performance monitoring and metrics
+- [ ] Advanced buffer pool with NUMA-aware allocation
+- [ ] Real-time scheduling support and priority handling
+- [ ] Performance monitoring and metrics collection
+- [ ] Async/await interface for modern Rust applications

@@ -1,3 +1,40 @@
+//! Low-level socket operations and platform abstractions
+//!
+//! This module provides platform-specific socket operations and abstractions that
+//! form the foundation for high-performance networking. It handles the differences
+//! between Unix-like systems (Linux, macOS, BSD) and Windows, providing a unified
+//! interface for socket creation, configuration, and optimization.
+//!
+//! # Platform Support
+//!
+//! ## Unix Systems (Linux, macOS, BSD, Android)
+//! - Uses POSIX socket APIs (`socket`, `bind`, `listen`, etc.)
+//! - File descriptor-based socket handles
+//! - Support for advanced options like SO_BUSY_POLL (Linux)
+//! - Native IPv6 dual-stack support
+//!
+//! ## Windows
+//! - Uses WinSock2 APIs with automatic WSA initialization
+//! - SOCKET handle-based operations
+//! - Enhanced IOCP preparation for async operations
+//! - Comprehensive socket option support
+//!
+//! # Key Abstractions
+//!
+//! - **Domain**: IP protocol family (IPv4 vs IPv6)
+//! - **Type**: Socket type (Stream for TCP, Dgram for UDP)
+//! - **Protocol**: Transport protocol (TCP, UDP)
+//! - **SockAddr**: Platform-specific socket address storage
+//!
+//! # Safety
+//!
+//! This module contains `unsafe` code for:
+//! - Raw socket system calls
+//! - Memory management of socket addresses
+//! - Platform-specific socket option manipulation
+//!
+//! All `unsafe` operations are carefully encapsulated within safe interfaces.
+
 use std::io;
 use std::net::SocketAddr;
 
