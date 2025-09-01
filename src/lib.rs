@@ -77,18 +77,18 @@
 #![warn(missing_docs)]
 #![warn(missing_debug_implementations)]
 
+/// CPU affinity and thread pinning utilities
+pub mod affinity;
+/// Memory-efficient buffer pool for network operations
+pub mod buffer_pool;
 /// Network configuration and performance tuning
 pub mod config;
 /// Low-level socket operations and platform abstractions  
 pub mod raw;
-/// High-performance UDP socket implementation
-pub mod udp;
 /// High-performance TCP socket implementation
 pub mod tcp;
-/// Memory-efficient buffer pool for network operations
-pub mod buffer_pool;
-/// CPU affinity and thread pinning utilities
-pub mod affinity;
+/// High-performance UDP socket implementation
+pub mod udp;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "monoio-runtime")] {
@@ -104,17 +104,17 @@ cfg_if::cfg_if! {
     }
 }
 
+pub use buffer_pool::BufferPool;
 /// Convenience re-exports for common types and functions
 ///
 /// These re-exports provide easy access to the most commonly used
 /// types and functions without requiring full module paths.
 pub use config::{NetConfig, apply_low_latency};
-pub use rt::{Runtime, NetHandle};
-pub use buffer_pool::BufferPool;
+pub use rt::{NetHandle, Runtime};
 
 // Re-export main socket types for easier access
-pub use udp::Udp;
 pub use tcp::{TcpListener, TcpStream};
+pub use udp::Udp;
 
 // Re-export affinity utilities for performance tuning
-pub use affinity::{pin_to_cpu, pin_to_cpus, get_cpu_count, get_numa_topology};
+pub use affinity::{get_cpu_count, get_numa_topology, pin_to_cpu, pin_to_cpus};
