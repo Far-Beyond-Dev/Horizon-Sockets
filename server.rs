@@ -272,25 +272,39 @@ impl GameServer {
                 core_count, num_acceptors
         );
 
-        // On Windows, always create a single listener and use it for all acceptor tasks
+        // On Windows, ensure only one Tokio listener per address/port, add more acceptors if needed
         #[cfg(target_os = "windows")]
         let listeners = {
-            let mut builder = SocketBuilder::new()
-                .bind(self.config.bind_address.to_string())
-                .map_err(|e| ServerError::Network(format!("SocketBuilder bind failed: {e}")))?;
-            builder = builder.backlog(65535)
-                .map_err(|e| ServerError::Network(format!("SocketBuilder backlog failed: {e}")))?;
-            let listener = builder.tcp_listener()
-                .map_err(|e| ServerError::Network(format!("TcpListener creation failed: {e}")))?;
-            let std_listener = listener.as_std();
-            std_listener.set_nonblocking(true).ok();
-            let tokio_listener = tokio::net::TcpListener::from_std(std_listener.try_clone()
-                .map_err(|e| ServerError::Network(format!("Failed to clone std TcpListener: {e}")))?)
-                .map_err(|e| ServerError::Network(format!("Tokio listener creation failed: {e}")))?;
+            use std::collections::HashMap;
+            use std::sync::Mutex;
+            use once_cell::sync::Lazy;
+
+            static LISTENER_REGISTRY: Lazy<Mutex<HashMap<String, tokio::net::TcpListener>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+            let addr_str = self.config.bind_address.to_string();
+            let mut registry = LISTENER_REGISTRY.lock().unwrap();
+            let listener = if let Some(existing) = registry.get(&addr_str) {
+                trace!("⚠️ (Windows) Listener already exists for {}, adding more acceptors", addr_str);
+                existing.clone()
+            } else {
+                let mut builder = SocketBuilder::new()
+                    .bind(addr_str.clone())
+                    .map_err(|e| ServerError::Network(format!("SocketBuilder bind failed: {e}")))?;
+                builder = builder.backlog(65535)
+                    .map_err(|e| ServerError::Network(format!("SocketBuilder backlog failed: {e}")))?;
+                let listener = builder.tcp_listener()
+                    .map_err(|e| ServerError::Network(format!("TcpListener creation failed: {e}")))?;
+                let std_listener = listener.as_std();
+                std_listener.set_nonblocking(true).ok();
+                let tokio_listener = tokio::net::TcpListener::from_std(std_listener.try_clone()
+                    .map_err(|e| ServerError::Network(format!("Failed to clone std TcpListener: {e}")))?)
+                    .map_err(|e| ServerError::Network(format!("Tokio listener creation failed: {e}")))?;
+                registry.insert(addr_str.clone(), tokio_listener.clone());
+                trace!("✅ (Windows) Single listener created and registered for {}", addr_str);
+                tokio_listener
+            };
             // Only one listener, used for all acceptor tasks
             let mut v = Vec::new();
-            v.push(tokio_listener);
-            trace!("✅ (Windows) Single listener created on {}", self.config.bind_address);
+            v.push(listener);
             v
         };
 
