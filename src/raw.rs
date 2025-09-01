@@ -113,7 +113,7 @@ cfg_if::cfg_if! {
                     let mut s: SOCKADDR_IN = unsafe { std::mem::zeroed() };
                     s.sin_family = AF_INET as _;
                     s.sin_port = a.port().to_be();
-                    s.sin_addr = IN_ADDR { S_un: IN_ADDR_0 { S_addr: u32::from_ne_bytes(a.ip().octets()).to_be() } };
+                    s.sin_addr = IN_ADDR { S_un: IN_ADDR_0 { S_addr: u32::from_be_bytes(a.ip().octets()) } };
                     (Domain::Ipv4, SockAddr::V4(s), std::mem::size_of::<SOCKADDR_IN>() as _)
                 }
                 SocketAddr::V6(a) => {
@@ -150,11 +150,10 @@ cfg_if::cfg_if! {
 
         pub fn set_nonblocking(os: OsSocket, on: bool) -> io::Result<()> {
             ensure_wsa();
-            unsafe {
-                let mut nb: u32 = if on {1} else {0};
-                if unsafe { ioctlsocket(os as usize, FIONBIO, &mut nb) } != 0 { return Err(io::Error::from_raw_os_error(unsafe { WSAGetLastError() })); }
-                Ok(())
-            }
+
+            let mut nb: u32 = if on {1} else {0};
+            if unsafe { ioctlsocket(os as usize, FIONBIO, &mut nb) } != 0 { return Err(io::Error::from_raw_os_error(unsafe { WSAGetLastError() })); }
+            Ok(())
         }
 
         pub fn listen_raw(os: OsSocket, backlog: i32) -> io::Result<()> { if unsafe { listen(os as usize, backlog) } != 0 { Err(io::Error::from_raw_os_error(unsafe { WSAGetLastError() })) } else { Ok(()) } }

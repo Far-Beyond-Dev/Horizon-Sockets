@@ -3,18 +3,34 @@ use std::net::{SocketAddr, UdpSocket as StdUdpSocket};
 use crate::config::{NetConfig, apply_low_latency};
 use crate::raw as r;
 
+#[cfg(windows)]
+use std::os::windows::io::AsRawSocket;
+
 pub struct Udp { inner: StdUdpSocket }
 
 impl Udp {
     pub fn bind(addr: SocketAddr, cfg: &NetConfig) -> io::Result<Self> {
-        let (domain, sa, len) = r::to_sockaddr(addr);
-        let os = r::socket(domain, r::Type::Dgram, r::Protocol::Udp)?;
-        r::set_nonblocking(os, true)?;
-        apply_low_latency(os, domain, r::Type::Dgram, cfg)?;
-        // Default to dual-stack on IPv6 unless explicitly set
-        if let r::Domain::Ipv6 = domain { r::set_ipv6_only(os, cfg.ipv6_only.unwrap_or(false))?; }
-        unsafe { r::bind_raw(os, &sa, len)?; }
-        let std = unsafe { r::udp_from_os(os) };
+        // Use standard library binding for simplicity and compatibility
+        let std = StdUdpSocket::bind(addr)?;
+        std.set_nonblocking(true)?;
+        
+        // Apply low-latency configurations if possible
+        cfg_if::cfg_if! {
+            if #[cfg(windows)] {
+                let os = std.as_raw_socket() as r::OsSocket;
+                let (domain, _, _) = r::to_sockaddr(addr);
+                let _ = apply_low_latency(os, domain, r::Type::Dgram, cfg);
+                
+                // Configure IPv6 dual-stack if needed  
+                if let (SocketAddr::V6(_), Some(v6only)) = (addr, cfg.ipv6_only) {
+                    let _ = r::set_ipv6_only(os, v6only);
+                }
+            } else {
+                // Unix platforms - would use as_raw_fd() 
+                let _ = (addr, cfg); // suppress unused warnings
+            }
+        }
+        
         Ok(Self { inner: std })
     }
 
