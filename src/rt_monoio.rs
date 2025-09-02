@@ -29,9 +29,7 @@
 
 #[cfg(feature = "monoio-runtime")]
 mod rt_monoio {
-    use std::future::Future;
     use std::io;
-    use std::time::Duration;
 
     /// High-performance async runtime using io_uring/IOCP
     ///

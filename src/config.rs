@@ -47,8 +47,6 @@
 
 use crate::raw;
 use std::io;
-#[cfg(target_os = "linux")]
-use std::time::Duration;
 
 /// Network configuration for performance tuning and optimization
 ///

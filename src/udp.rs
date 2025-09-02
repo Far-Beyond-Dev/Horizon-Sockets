@@ -98,6 +98,9 @@ use std::net::{SocketAddr, UdpSocket as StdUdpSocket};
 #[cfg(windows)]
 use std::os::windows::io::AsRawSocket;
 
+#[cfg(unix)]
+use std::os::fd::AsRawFd;
+
 /// High-performance UDP socket with batch operations and low-latency optimizations
 ///
 /// This wrapper around the standard library's `UdpSocket` provides extensive
@@ -476,7 +479,7 @@ impl Udp {
         unsafe {
             r::bind_raw(os, &sa, len)?;
         }
-        let std = r::udp_from_os(os);
+        let std = unsafe { r::udp_from_os(os) };
         Ok(Self { inner: std })
     }
 
@@ -721,9 +724,11 @@ unsafe fn recv_batch_linux(
     let mut iovecs: Vec<iovec> = Vec::with_capacity(max);
     let mut addrs_raw: Vec<sockaddr_storage> = Vec::with_capacity(max);
 
-    hdrs.set_len(max);
-    iovecs.set_len(max);
-    addrs_raw.set_len(max);
+    unsafe {
+        hdrs.set_len(max);
+        iovecs.set_len(max);
+        addrs_raw.set_len(max);
+    }
 
     for i in 0..max {
         let buf = &mut bufs[i];
@@ -748,13 +753,15 @@ unsafe fn recv_batch_linux(
         hdrs[i].msg_len = 0;
     }
 
-    let rc = recvmmsg(
-        fd,
-        hdrs.as_mut_ptr(),
-        max as u32,
-        MSG_DONTWAIT,
-        std::ptr::null_mut(),
-    );
+    let rc = unsafe {
+        recvmmsg(
+            fd,
+            hdrs.as_mut_ptr(),
+            max as u32,
+            MSG_DONTWAIT,
+            std::ptr::null_mut(),
+        )
+    };
     if rc < 0 {
         return Err(std::io::Error::last_os_error());
     }
@@ -765,14 +772,14 @@ unsafe fn recv_batch_linux(
         bufs[i].truncate(len);
         // Convert sockaddr_storage -> SocketAddr
         let ss = &addrs_raw[i];
-        let sa = &*(ss as *const _ as *const sockaddr);
+        let sa = unsafe { &*(ss as *const _ as *const sockaddr) };
         let addr = if sa.sa_family as i32 == AF_INET {
-            let sin = &*(ss as *const _ as *const sockaddr_in);
+            let sin = unsafe { &*(ss as *const _ as *const sockaddr_in) };
             let ip = std::net::Ipv4Addr::from(u32::from_be(sin.sin_addr.s_addr));
             let port = u16::from_be(sin.sin_port);
             SocketAddr::new(ip.into(), port)
         } else {
-            let sin6 = &*(ss as *const _ as *const sockaddr_in6);
+            let sin6 = unsafe { &*(ss as *const _ as *const sockaddr_in6) };
             let ip = std::net::Ipv6Addr::from(sin6.sin6_addr.s6_addr);
             let port = u16::from_be(sin6.sin6_port);
             SocketAddr::new(ip.into(), port)

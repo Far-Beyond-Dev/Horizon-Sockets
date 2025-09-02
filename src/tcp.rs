@@ -559,7 +559,7 @@ impl TcpListener {
         }
         let backlog = cfg.tcp_backlog.unwrap_or(1024);
         r::listen_raw(os, backlog)?;
-        let std = r::tcp_listener_from_os(os);
+        let std = unsafe { r::tcp_listener_from_os(os) };
         Ok(Self { inner: std })
     }
     /// Accepts an incoming connection in non-blocking mode

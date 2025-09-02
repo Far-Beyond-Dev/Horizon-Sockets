@@ -1,7 +1,7 @@
 [package]
 name = "horizon_sockets"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 cfg-if = "1"
@@ -24,7 +24,7 @@ anyhow = "1"
 # Default to the mio-based runtime which maps to epoll/kqueue/IOCP
 # Optionally enable the monoio runtime (io_uring on Linux, IOCP on Windows)
 # by adding `features = ["monoio-runtime"]` to your dependent crate.
-default = ["mio-runtime"]
+default = ["mio-runtime","monoio-runtime"]
 
 mio-runtime = ["dep:mio", "dep:slab", "dep:log"]
 monoio-runtime = ["dep:monoio"]

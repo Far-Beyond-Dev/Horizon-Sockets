@@ -67,7 +67,7 @@ pub enum Protocol {
 
 cfg_if::cfg_if! {
     if #[cfg(unix)] {
-        use std::os::unix::io::{RawFd, FromRawFd, AsRawFd};
+        use std::os::unix::io::{RawFd, FromRawFd};
         pub type OsSocket = RawFd;
 
         /// Platform-specific socket address storage
@@ -95,7 +95,7 @@ cfg_if::cfg_if! {
                     s.sin6_family = libc::AF_INET6 as _;
                     s.sin6_port = a.port().to_be();
                     s.sin6_flowinfo = a.flowinfo();
-                    s.Anonymous.sin6_scope_id = a.scope_id();
+                    s.sin6_scope_id = a.scope_id();
                     s.sin6_addr = libc::in6_addr { s6_addr: a.ip().octets() };
                     (Domain::Ipv6, SockAddr::V6(s), std::mem::size_of::<libc::sockaddr_in6>() as _)
                 }
@@ -108,7 +108,7 @@ cfg_if::cfg_if! {
                 SockAddr::V4(s) => (s as *const _ as *const libc::sockaddr, len),
                 SockAddr::V6(s) => (s as *const _ as *const libc::sockaddr, len),
             };
-            if libc::bind(os, ptr, l) != 0 { return Err(io::Error::last_os_error()); }
+            if unsafe { libc::bind(os, ptr, l) } != 0 { return Err(io::Error::last_os_error()); }
             Ok(())
         }
 
@@ -164,11 +164,11 @@ cfg_if::cfg_if! {
         }
 
         /// Convert OS socket to std UDP socket
-        pub unsafe fn udp_from_os(fd: RawFd) -> std::net::UdpSocket { std::net::UdpSocket::from_raw_fd(fd) }
+        pub unsafe fn udp_from_os(fd: RawFd) -> std::net::UdpSocket { unsafe { std::net::UdpSocket::from_raw_fd(fd) } }
         /// Convert OS socket to std TCP listener
-        pub unsafe fn tcp_listener_from_os(fd: RawFd) -> std::net::TcpListener { std::net::TcpListener::from_raw_fd(fd) }
+        pub unsafe fn tcp_listener_from_os(fd: RawFd) -> std::net::TcpListener { unsafe { std::net::TcpListener::from_raw_fd(fd) } }
         /// Convert OS socket to std TCP stream
-        pub unsafe fn tcp_stream_from_os(fd: RawFd) -> std::net::TcpStream { std::net::TcpStream::from_raw_fd(fd) }
+        pub unsafe fn tcp_stream_from_os(fd: RawFd) -> std::net::TcpStream { unsafe { std::net::TcpStream::from_raw_fd(fd) } }
 
     } else {
         // Windows
@@ -211,7 +211,14 @@ cfg_if::cfg_if! {
                     s.sin6_family = AF_INET6 as _;
                     s.sin6_port = a.port().to_be();
                     s.sin6_flowinfo = a.flowinfo();
-                    s.Anonymous.sin6_scope_id = a.scope_id();
+                    #[cfg(target_os = "windows")]
+                    {
+                        s.Anonymous.sin6_scope_id = a.scope_id();
+                    }
+                    #[cfg(not(target_os = "windows"))]
+                    {
+                        s.sin6_scope_id = a.scope_id();
+                    }
                     s.sin6_addr = IN6_ADDR { u: IN6_ADDR_0 { Byte: a.ip().octets() } };
                     (Domain::Ipv6, SockAddr::V6(s), std::mem::size_of::<SOCKADDR_IN6>() as _)
                 }
