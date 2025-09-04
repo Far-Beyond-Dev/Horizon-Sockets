@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+<<<<<<< HEAD
       "Bash(cargo build:*)",
       "WebSearch",
       "Bash(rustup target:*)",
@@ -10,6 +11,15 @@
       "Read(/C:\\Users\\redst\\OneDrive\\Documents\\GitHub\\Horizon-Sockets/**)",
       "Read(/C:\\Users\\redst\\OneDrive\\Documents\\GitHub\\Horizon-Sockets\\src/**)",
       "Read(/C:\\Users\\redst\\OneDrive\\Documents\\GitHub\\Horizon-Sockets\\src/**)"
+=======
+      "Bash(cargo check:*)",
+      "Bash(cargo test)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(wsl -d Ubuntu -- cargo build:*)",
+      "Bash(wsl -d Ubuntu:*)",
+      "Bash(rustup --version)"
+>>>>>>> origin/main
     ],
     "deny": [],
     "ask": []

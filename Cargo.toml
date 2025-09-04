@@ -1,9 +1,9 @@
 cargo-features = ["edition2024"]
 
 [package]
-name = "Horizon-Socket-Low"
+name = "horizon_sockets"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 cfg-if = "1"
@@ -11,14 +11,13 @@ bytemuck = { version = "1", features = ["derive"] }
 log = { version = "0.4", optional = true }
 slab = { version = "0.4", optional = true }
 
-
 # Runtime back-ends
 mio = { version = "1", features = ["net", "os-ext"], optional = true }
 monoio = { version = "0.2", optional = true }
 
-
 # Platform bindings
 libc = { version = "0.2", features = ["extra_traits"] }
+<<<<<<< HEAD
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59.0", features = [
@@ -28,6 +27,9 @@ windows-sys = { version = "0.59.0", features = [
 "Win32_System_SystemInformation"
 ] }
 
+=======
+windows-sys = { version = "0.59.0", features = [ "Win32_Foundation", "Win32_System_Threading", "Win32_Networking_WinSock", "Win32_System_SystemInformation" ] }
+>>>>>>> origin/main
 
 [dev-dependencies]
 anyhow = "1"
@@ -36,7 +38,7 @@ anyhow = "1"
 # Default to the mio-based runtime which maps to epoll/kqueue/IOCP
 # Optionally enable the monoio runtime (io_uring on Linux, IOCP on Windows)
 # by adding `features = ["monoio-runtime"]` to your dependent crate.
-default = ["mio-runtime"]
+default = ["mio-runtime","monoio-runtime"]
 
 mio-runtime = ["dep:mio", "dep:slab", "dep:log"]
 monoio-runtime = ["dep:monoio"]
