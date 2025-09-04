@@ -50,7 +50,24 @@ cfg_if::cfg_if! {
             let d = match domain { Domain::Ipv4 => libc::AF_INET, Domain::Ipv6 => libc::AF_INET6 };
             let t = match ty { Type::Stream => libc::SOCK_STREAM, Type::Dgram => libc::SOCK_DGRAM };
             let p = match proto { Protocol::Tcp => libc::IPPROTO_TCP, Protocol::Udp => libc::IPPROTO_UDP };
-            let fd = unsafe { libc::socket(d, t | libc::SOCK_CLOEXEC, p) };
+            
+            // Use SOCK_CLOEXEC where available, fallback to fcntl for macOS
+            cfg_if::cfg_if! {
+                if #[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))] {
+                    let fd = unsafe { libc::socket(d, t | libc::SOCK_CLOEXEC, p) };
+                } else {
+                    let fd = unsafe { libc::socket(d, t, p) };
+                    if fd >= 0 {
+                        unsafe {
+                            let flags = libc::fcntl(fd, libc::F_GETFD);
+                            if flags >= 0 {
+                                let _ = libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC);
+                            }
+                        }
+                    }
+                }
+            }
+            
             if fd < 0 { return Err(io::Error::last_os_error()); }
             Ok(fd)
         }
@@ -104,25 +121,32 @@ cfg_if::cfg_if! {
         }
 
         #[allow(non_camel_case_types)]
-        pub enum SockAddr { V4(sockaddr_in), V6(sockaddr_in6) }
+        pub enum SockAddr { V4(SOCKADDR_IN), V6(SOCKADDR_IN6) }
 
         pub fn to_sockaddr(addr: SocketAddr) -> (Domain, SockAddr, i32) {
             match addr {
                 SocketAddr::V4(a) => {
-                    let mut s: sockaddr_in = unsafe { std::mem::zeroed() };
+                    let mut s: SOCKADDR_IN = unsafe { std::mem::zeroed() };
                     s.sin_family = AF_INET as _;
                     s.sin_port = a.port().to_be();
                     s.sin_addr = IN_ADDR { S_un: IN_ADDR_0 { S_addr: u32::from_ne_bytes(a.ip().octets()).to_be() } };
-                    (Domain::Ipv4, SockAddr::V4(s), std::mem::size_of::<sockaddr_in>() as _)
+                    (Domain::Ipv4, SockAddr::V4(s), std::mem::size_of::<SOCKADDR_IN>() as _)
                 }
                 SocketAddr::V6(a) => {
-                    let mut s: sockaddr_in6 = unsafe { std::mem::zeroed() };
+                    let mut s: SOCKADDR_IN6 = unsafe { std::mem::zeroed() };
                     s.sin6_family = AF_INET6 as _;
                     s.sin6_port = a.port().to_be();
                     s.sin6_flowinfo = a.flowinfo();
-                    s.sin6_scope_id = a.scope_id();
+                    // Platform-specific field access for sin6_scope_id
+                    cfg_if::cfg_if! {
+                        if #[cfg(target_env = "msvc")] {
+                            s.Anonymous.sin6_scope_id = a.scope_id();
+                        } else {
+                            s.sin6_scope_id = a.scope_id();
+                        }
+                    }
                     s.sin6_addr = IN6_ADDR { u: IN6_ADDR_0 { Byte: a.ip().octets() } };
-                    (Domain::Ipv6, SockAddr::V6(s), std::mem::size_of::<sockaddr_in6>() as _)
+                    (Domain::Ipv6, SockAddr::V6(s), std::mem::size_of::<SOCKADDR_IN6>() as _)
                 }
             }
         }
@@ -133,8 +157,8 @@ cfg_if::cfg_if! {
                 SockAddr::V4(s) => (s as *const _ as *const SOCKADDR, len),
                 SockAddr::V6(s) => (s as *const _ as *const SOCKADDR, len),
             };
-            let rc = bind(os as usize, ptr, l);
-            if rc != 0 { return Err(io::Error::from_raw_os_error(WSAGetLastError())); }
+            let rc = unsafe { bind(os as usize, ptr, l) };
+            if rc != 0 { return Err(io::Error::from_raw_os_error(unsafe { WSAGetLastError() })); }
             Ok(())
         }
 
@@ -150,8 +174,8 @@ cfg_if::cfg_if! {
         pub fn set_nonblocking(os: OsSocket, on: bool) -> io::Result<()> {
             ensure_wsa();
             unsafe {
-                let mut nb: u_long = if on {1} else {0};
-                if ioctlsocket(os as usize, FIONBIO, &mut nb) != 0 { return Err(io::Error::from_raw_os_error(WSAGetLastError())); }
+                let mut nb: u32 = if on {1} else {0};
+                if ioctlsocket(os as usize, FIONBIO, &mut nb) != 0 { return Err(io::Error::from_raw_os_error(unsafe { WSAGetLastError() })); }
                 Ok(())
             }
         }
@@ -161,7 +185,7 @@ cfg_if::cfg_if! {
         fn setsockopt_int(socket: OsSocket, level: i32, opt: i32, val: i32) -> io::Result<()> {
             unsafe {
                 let rc = setsockopt(socket as usize, level, opt, &val as *const _ as _, std::mem::size_of::<i32>() as _);
-                if rc != 0 { Err(io::Error::from_raw_os_error(WSAGetLastError())) } else { Ok(()) }
+                if rc != 0 { Err(io::Error::from_raw_os_error(unsafe { WSAGetLastError() })) } else { Ok(()) }
             }
         }
         pub fn set_recv_buffer(os: OsSocket, sz: i32) -> io::Result<()> { setsockopt_int(os, SOL_SOCKET as _, SO_RCVBUF as _, sz) }
@@ -175,7 +199,7 @@ cfg_if::cfg_if! {
         pub fn set_reuse_port(_os: OsSocket, _on: bool) -> io::Result<()> { Ok(()) /* not applicable */ }
         pub fn set_busy_poll(_os: OsSocket, _usec: u32) -> io::Result<()> { Ok(()) /* not applicable */ }
 
-        pub unsafe fn udp_from_os(s: OsSocket) -> std::net::UdpSocket { std::net::UdpSocket::from_raw_socket(s) }
-        pub unsafe fn tcp_listener_from_os(s: OsSocket) -> std::net::TcpListener { std::net::TcpListener::from_raw_socket(s) }
+        pub unsafe fn udp_from_os(s: OsSocket) -> std::net::UdpSocket { unsafe { std::net::UdpSocket::from_raw_socket(s) } }
+        pub unsafe fn tcp_listener_from_os(s: OsSocket) -> std::net::TcpListener { unsafe { std::net::TcpListener::from_raw_socket(s) } }
     }
 }

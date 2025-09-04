@@ -3,7 +3,13 @@
     "allow": [
       "Bash(cargo build:*)",
       "WebSearch",
-      "Bash(rustup target:*)"
+      "Bash(rustup target:*)",
+      "Bash(wsl -d Ubuntu cargo:*)",
+      "Bash(cargo check:*)",
+      "Read(/C:\\Users\\redst\\OneDrive\\Documents\\GitHub\\Horizon-Sockets\\src/**)",
+      "Read(/C:\\Users\\redst\\OneDrive\\Documents\\GitHub\\Horizon-Sockets/**)",
+      "Read(/C:\\Users\\redst\\OneDrive\\Documents\\GitHub\\Horizon-Sockets\\src/**)",
+      "Read(/C:\\Users\\redst\\OneDrive\\Documents\\GitHub\\Horizon-Sockets\\src/**)"
     ],
     "deny": [],
     "ask": []
