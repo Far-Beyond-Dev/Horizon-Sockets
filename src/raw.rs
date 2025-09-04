@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::io;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Domain { Ipv4, Ipv6 }
@@ -41,7 +42,7 @@ cfg_if::cfg_if! {
                 SockAddr::V4(s) => (s as *const _ as *const libc::sockaddr, len),
                 SockAddr::V6(s) => (s as *const _ as *const libc::sockaddr, len),
             };
-            if libc::bind(os, ptr, l) != 0 { return Err(io::Error::last_os_error()); }
+            if unsafe { libc::bind(os, ptr, l) } != 0 { return Err(io::Error::last_os_error()); }
             Ok(())
         }
 
@@ -83,10 +84,10 @@ cfg_if::cfg_if! {
             if rc != 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
         }
 
-        pub unsafe fn udp_from_os(fd: RawFd) -> std::net::UdpSocket { std::net::UdpSocket::from_raw_fd(fd) }
-        pub unsafe fn tcp_listener_from_os(fd: RawFd) -> std::net::TcpListener { std::net::TcpListener::from_raw_fd(fd) }
+        pub unsafe fn udp_from_os(fd: RawFd) -> std::net::UdpSocket { unsafe { std::net::UdpSocket::from_raw_fd(fd) } }
+        pub unsafe fn tcp_listener_from_os(fd: RawFd) -> std::net::TcpListener { unsafe { std::net::TcpListener::from_raw_fd(fd) } }
 
-    } else {
+    } else if #[cfg(windows)] {
         // Windows
         use std::sync::Once;
         use windows_sys::Win32::Networking::WinSock::*;

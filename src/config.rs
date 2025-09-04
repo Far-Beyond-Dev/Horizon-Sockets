@@ -1,5 +1,6 @@
 use std::io;
 #[cfg(target_os = "linux")] use std::time::Duration;
+use crate::raw;
 
 
 /// Tunables to push latency down. Defaults are conservative.
@@ -40,12 +41,12 @@ impl Default for NetConfig {
 pub fn apply_low_latency(os: raw::OsSocket, domain: raw::Domain, ty: raw::Type, cfg: &NetConfig) -> io::Result<()> {
     use crate::raw as r;
 
-    if let Some(sz) = cfg.recv_buf { r::set_recv_buffer(os, sz)?; }
-    if let Some(sz) = cfg.send_buf { r::set_send_buffer(os, sz)?; }
+    if let Some(sz) = cfg.recv_buf { r::set_recv_buffer(os, sz as i32)?; }
+    if let Some(sz) = cfg.send_buf { r::set_send_buffer(os, sz as i32)?; }
 
     // Generic DSCP/TOS
     if let Some(tos) = cfg.tos {
-        match domain { r::Domain::Ipv4 => r::set_tos_v4(os, tos)?, r::Domain::Ipv6 => r::set_tos_v6(os, tos)?, }
+        match domain { r::Domain::Ipv4 => r::set_tos_v4(os, tos as i32)?, r::Domain::Ipv6 => r::set_tos_v6(os, tos as i32)?, }
     }
 
     // IPv6 toggles

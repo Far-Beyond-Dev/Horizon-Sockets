@@ -21,7 +21,7 @@ impl Runtime {
         }
     }
 
-    pub fn register_udp(&self, socket: &MioUdpSocket, token: Token, interest: Interest) -> io::Result<()> { self.poll.registry().register(socket, token, interest) }
-    pub fn register_tcp_listener(&self, l: &MioTcpListener, token: Token) -> io::Result<()> { self.poll.registry().register(l, token, Interest::READABLE) }
-    pub fn register_tcp_stream(&self, s: &MioTcpStream, token: Token, interest: Interest) -> io::Result<()> { self.poll.registry().register(s, token, interest) }
+    pub fn register_udp(&self, socket: &mut MioUdpSocket, token: Token, interest: Interest) -> io::Result<()> { self.poll.registry().register(socket, token, interest) }
+    pub fn register_tcp_listener(&self, l: &mut MioTcpListener, token: Token) -> io::Result<()> { self.poll.registry().register(l, token, Interest::READABLE) }
+    pub fn register_tcp_stream(&self, s: &mut MioTcpStream, token: Token, interest: Interest) -> io::Result<()> { self.poll.registry().register(s, token, interest) }
 }

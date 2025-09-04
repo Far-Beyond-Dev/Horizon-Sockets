@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build:*)",
+      "WebSearch",
+      "Bash(rustup target:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
