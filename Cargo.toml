@@ -17,7 +17,6 @@ monoio = { version = "0.2", optional = true }
 
 # Platform bindings
 libc = { version = "0.2", features = ["extra_traits"] }
-<<<<<<< HEAD
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59.0", features = [
@@ -27,9 +26,6 @@ windows-sys = { version = "0.59.0", features = [
 "Win32_System_SystemInformation"
 ] }
 
-=======
-windows-sys = { version = "0.59.0", features = [ "Win32_Foundation", "Win32_System_Threading", "Win32_Networking_WinSock", "Win32_System_SystemInformation" ] }
->>>>>>> origin/main
 
 [dev-dependencies]
 anyhow = "1"

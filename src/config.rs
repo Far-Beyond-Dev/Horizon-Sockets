@@ -47,25 +47,11 @@
 
 use crate::raw;
 use std::io;
-<<<<<<< HEAD
 #[cfg(target_os = "linux")] use std::time::Duration;
-use crate::raw;
-=======
->>>>>>> origin/main
 
-/// Network configuration for performance tuning and optimization
-///
-/// This structure contains all configurable parameters for optimizing
-/// network socket performance. Different combinations of settings are
-/// suitable for different workloads:
-///
-/// - **Low Latency**: Small buffers, busy polling, TCP_NODELAY
-/// - **High Throughput**: Large buffers, SO_REUSEPORT, no busy polling  
-/// - **Mixed Workload**: Balanced settings with moderate buffer sizes
-///
-/// All parameters are optional and use sensible defaults when not specified.
-/// Platform-specific options are ignored on unsupported platforms.
-#[derive(Clone, Debug, PartialEq)]
+
+/// Tunables to push latency down. Defaults are conservative.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NetConfig {
     /// Enable TCP_NODELAY to disable Nagle's algorithm
     ///
@@ -336,29 +322,12 @@ pub fn apply_low_latency(
 ) -> io::Result<()> {
     use crate::raw as r;
 
-<<<<<<< HEAD
     if let Some(sz) = cfg.recv_buf { r::set_recv_buffer(os, sz as i32)?; }
     if let Some(sz) = cfg.send_buf { r::set_send_buffer(os, sz as i32)?; }
-=======
-    // Configure socket buffer sizes for optimal performance
-    if let Some(sz) = cfg.recv_buf {
-        r::set_recv_buffer(os, sz as i32)?;
-    }
-    if let Some(sz) = cfg.send_buf {
-        r::set_send_buffer(os, sz as i32)?;
-    }
->>>>>>> origin/main
 
     // Apply Quality of Service / DSCP marking
     if let Some(tos) = cfg.tos {
-<<<<<<< HEAD
         match domain { r::Domain::Ipv4 => r::set_tos_v4(os, tos as i32)?, r::Domain::Ipv6 => r::set_tos_v6(os, tos as i32)?, }
-=======
-        match domain {
-            r::Domain::Ipv4 => r::set_tos_v4(os, tos as i32)?,
-            r::Domain::Ipv6 => r::set_tos_v6(os, tos as i32)?,
-        }
->>>>>>> origin/main
     }
 
     // Configure IPv6-specific options

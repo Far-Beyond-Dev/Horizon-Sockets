@@ -58,6 +58,7 @@ mod rt_monoio {
     }
 
     /// Configuration for the monoio runtime
+    #[allow(dead_code)]
     #[derive(Debug, Clone)]
     struct RuntimeConfig {
         /// Number of completion queue entries

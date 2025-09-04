@@ -37,7 +37,6 @@
 
 use std::io;
 use std::net::SocketAddr;
-use std::io;
 
 /// IP protocol domain for sockets
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -181,17 +180,8 @@ cfg_if::cfg_if! {
             if rc != 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
         }
 
-<<<<<<< HEAD
-        pub unsafe fn udp_from_os(fd: RawFd) -> std::net::UdpSocket { unsafe { std::net::UdpSocket::from_raw_fd(fd) } }
-        pub unsafe fn tcp_listener_from_os(fd: RawFd) -> std::net::TcpListener { unsafe { std::net::TcpListener::from_raw_fd(fd) } }
-=======
-        /// Convert OS socket to std UDP socket
-        pub unsafe fn udp_from_os(fd: RawFd) -> std::net::UdpSocket { unsafe { std::net::UdpSocket::from_raw_fd(fd) } }
-        /// Convert OS socket to std TCP listener
-        pub unsafe fn tcp_listener_from_os(fd: RawFd) -> std::net::TcpListener { unsafe { std::net::TcpListener::from_raw_fd(fd) } }
-        /// Convert OS socket to std TCP stream
-        pub unsafe fn tcp_stream_from_os(fd: RawFd) -> std::net::TcpStream { unsafe { std::net::TcpStream::from_raw_fd(fd) } }
->>>>>>> origin/main
+        pub unsafe fn udp_from_os(fd: RawFd) -> std::net::UdpSocket { std::net::UdpSocket::from_raw_fd(fd) }
+        pub unsafe fn tcp_listener_from_os(fd: RawFd) -> std::net::TcpListener { std::net::TcpListener::from_raw_fd(fd) }
 
     } else if #[cfg(windows)] {
         // Windows
@@ -210,32 +200,16 @@ cfg_if::cfg_if! {
             });
         }
 
-<<<<<<< HEAD
         #[allow(non_camel_case_types)]
         pub enum SockAddr { V4(SOCKADDR_IN), V6(SOCKADDR_IN6) }
-=======
-        /// Platform-specific socket address storage
-        #[allow(non_camel_case_types, missing_debug_implementations)]
-        pub enum SockAddr {
-            /// IPv4 socket address
-            V4(SOCKADDR_IN),
-            /// IPv6 socket address
-            V6(SOCKADDR_IN6),
-        }
->>>>>>> origin/main
 
-        /// Convert SocketAddr to platform-specific socket address
         pub fn to_sockaddr(addr: SocketAddr) -> (Domain, SockAddr, i32) {
             match addr {
                 SocketAddr::V4(a) => {
                     let mut s: SOCKADDR_IN = unsafe { std::mem::zeroed() };
                     s.sin_family = AF_INET as _;
                     s.sin_port = a.port().to_be();
-<<<<<<< HEAD
                     s.sin_addr = IN_ADDR { S_un: IN_ADDR_0 { S_addr: u32::from_ne_bytes(a.ip().octets()).to_be() } };
-=======
-                    s.sin_addr = IN_ADDR { S_un: IN_ADDR_0 { S_addr: u32::from_be_bytes(a.ip().octets()) } };
->>>>>>> origin/main
                     (Domain::Ipv4, SockAddr::V4(s), std::mem::size_of::<SOCKADDR_IN>() as _)
                 }
                 SocketAddr::V6(a) => {
@@ -243,23 +217,12 @@ cfg_if::cfg_if! {
                     s.sin6_family = AF_INET6 as _;
                     s.sin6_port = a.port().to_be();
                     s.sin6_flowinfo = a.flowinfo();
-<<<<<<< HEAD
-                    // Platform-specific field access for sin6_scope_id
                     cfg_if::cfg_if! {
-                        if #[cfg(target_env = "msvc")] {
+                        if #[cfg(windows)] {
                             s.Anonymous.sin6_scope_id = a.scope_id();
                         } else {
                             s.sin6_scope_id = a.scope_id();
                         }
-=======
-                    #[cfg(target_os = "windows")]
-                    {
-                        s.Anonymous.sin6_scope_id = a.scope_id();
-                    }
-                    #[cfg(not(target_os = "windows"))]
-                    {
-                        s.sin6_scope_id = a.scope_id();
->>>>>>> origin/main
                     }
                     s.sin6_addr = IN6_ADDR { u: IN6_ADDR_0 { Byte: a.ip().octets() } };
                     (Domain::Ipv6, SockAddr::V6(s), std::mem::size_of::<SOCKADDR_IN6>() as _)
@@ -292,18 +255,11 @@ cfg_if::cfg_if! {
         /// Set socket non-blocking mode
         pub fn set_nonblocking(os: OsSocket, on: bool) -> io::Result<()> {
             ensure_wsa();
-<<<<<<< HEAD
             unsafe {
                 let mut nb: u32 = if on {1} else {0};
-                if ioctlsocket(os as usize, FIONBIO, &mut nb) != 0 { return Err(io::Error::from_raw_os_error(unsafe { WSAGetLastError() })); }
+                if ioctlsocket(os as usize, FIONBIO, &mut nb) != 0 { return Err(io::Error::from_raw_os_error(WSAGetLastError())); }
                 Ok(())
             }
-=======
-
-            let mut nb: u32 = if on {1} else {0};
-            if unsafe { ioctlsocket(os as usize, FIONBIO, &mut nb) } != 0 { return Err(io::Error::from_raw_os_error(unsafe { WSAGetLastError() })); }
-            Ok(())
->>>>>>> origin/main
         }
 
         /// Start listening on socket with specified backlog
@@ -312,7 +268,7 @@ cfg_if::cfg_if! {
         fn setsockopt_int(socket: OsSocket, level: i32, opt: i32, val: i32) -> io::Result<()> {
             unsafe {
                 let rc = setsockopt(socket as usize, level, opt, &val as *const _ as _, std::mem::size_of::<i32>() as _);
-                if rc != 0 { Err(io::Error::from_raw_os_error(unsafe { WSAGetLastError() })) } else { Ok(()) }
+                if rc != 0 { Err(io::Error::from_raw_os_error(WSAGetLastError())) } else { Ok(()) }
             }
         }
         /// Set socket receive buffer size
@@ -336,16 +292,7 @@ cfg_if::cfg_if! {
         /// Enable busy polling for minimal latency (no-op on Windows)
         pub fn set_busy_poll(_os: OsSocket, _usec: u32) -> io::Result<()> { Ok(()) /* not applicable */ }
 
-<<<<<<< HEAD
         pub unsafe fn udp_from_os(s: OsSocket) -> std::net::UdpSocket { unsafe { std::net::UdpSocket::from_raw_socket(s) } }
         pub unsafe fn tcp_listener_from_os(s: OsSocket) -> std::net::TcpListener { unsafe { std::net::TcpListener::from_raw_socket(s) } }
-=======
-        /// Convert OS socket to std UDP socket
-        pub fn udp_from_os(s: OsSocket) -> std::net::UdpSocket { unsafe { std::net::UdpSocket::from_raw_socket(s) } }
-        /// Convert OS socket to std TCP listener
-        pub fn tcp_listener_from_os(s: OsSocket) -> std::net::TcpListener { unsafe { std::net::TcpListener::from_raw_socket(s) } }
-        /// Convert OS socket to std TCP stream
-        pub fn tcp_stream_from_os(s: OsSocket) -> std::net::TcpStream { unsafe { std::net::TcpStream::from_raw_socket(s) } }
->>>>>>> origin/main
     }
 }

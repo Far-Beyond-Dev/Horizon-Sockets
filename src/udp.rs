@@ -711,17 +711,13 @@ impl Udp {
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-<<<<<<< HEAD
 use std::os::unix::io::AsRawFd;
 #[cfg(any(target_os = "linux", target_os = "android"))]
-unsafe fn recv_batch_linux(sock: &Udp, bufs: &mut [Vec<u8>], addrs: &mut [SocketAddr]) -> io::Result<usize> {
-=======
 unsafe fn recv_batch_linux(
     sock: &Udp,
     bufs: &mut [Vec<u8>],
     addrs: &mut [SocketAddr],
 ) -> io::Result<usize> {
->>>>>>> origin/main
     use libc::*;
     let fd = sock.inner.as_raw_fd();
     let max = bufs.len().min(addrs.len());
@@ -759,23 +755,8 @@ unsafe fn recv_batch_linux(
         hdrs[i].msg_len = 0;
     }
 
-<<<<<<< HEAD
-    let rc = unsafe { recvmmsg(fd, hdrs.as_mut_ptr(), max as u32, MSG_DONTWAIT, std::ptr::null_mut()) };
+    let rc = recvmmsg(fd, hdrs.as_mut_ptr(), max as u32, MSG_DONTWAIT, std::ptr::null_mut());
     if rc < 0 { return Err(std::io::Error::last_os_error()); }
-=======
-    let rc = unsafe {
-        recvmmsg(
-            fd,
-            hdrs.as_mut_ptr(),
-            max as u32,
-            MSG_DONTWAIT,
-            std::ptr::null_mut(),
-        )
-    };
-    if rc < 0 {
-        return Err(std::io::Error::last_os_error());
-    }
->>>>>>> origin/main
     let n = rc as usize;
 
     for i in 0..n {
@@ -783,13 +764,9 @@ unsafe fn recv_batch_linux(
         bufs[i].truncate(len);
         // Convert sockaddr_storage -> SocketAddr
         let ss = &addrs_raw[i];
-        let sa = unsafe { &*(ss as *const _ as *const sockaddr) };
-<<<<<<< HEAD
+        let sa = &*(ss as *const _ as *const sockaddr);
         let addr = if sa.sa_family as i32 == AF_INET { 
-=======
-        let addr = if sa.sa_family as i32 == AF_INET {
->>>>>>> origin/main
-            let sin = unsafe { &*(ss as *const _ as *const sockaddr_in) };
+            let sin = &*(ss as *const _ as *const sockaddr_in);
             let ip = std::net::Ipv4Addr::from(u32::from_be(sin.sin_addr.s_addr));
             let port = u16::from_be(sin.sin_port);
             SocketAddr::new(ip.into(), port)
