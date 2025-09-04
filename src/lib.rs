@@ -150,7 +150,10 @@ pub mod tcp;
 pub mod udp;
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "monoio-runtime")] {
+    if #[cfg(all(
+        feature = "monoio-runtime",
+        any(target_os = "linux", target_os = "windows")
+    ))] {
         /// Runtime implementation using monoio (io_uring on Linux, IOCP on Windows)
         pub mod rt { pub use crate::rt_monoio::*; }
         mod rt_monoio;
@@ -159,7 +162,7 @@ cfg_if::cfg_if! {
         pub mod rt { pub use crate::rt_mio::*; }
         mod rt_mio;
     } else {
-        compile_error!("Enable one of: mio-runtime (default) or monoio-runtime");
+        compile_error!("No runtime available. Enable mio-runtime at minimum.");
     }
 }
 

@@ -753,18 +753,8 @@ unsafe fn recv_batch_linux(
         hdrs[i].msg_len = 0;
     }
 
-    let rc = unsafe {
-        recvmmsg(
-            fd,
-            hdrs.as_mut_ptr(),
-            max as u32,
-            MSG_DONTWAIT,
-            std::ptr::null_mut(),
-        )
-    };
-    if rc < 0 {
-        return Err(std::io::Error::last_os_error());
-    }
+    let rc = unsafe { recvmmsg(fd, hdrs.as_mut_ptr(), max as u32, MSG_DONTWAIT, std::ptr::null_mut()) };
+    if rc < 0 { return Err(std::io::Error::last_os_error()); }
     let n = rc as usize;
 
     for i in 0..n {
@@ -773,7 +763,7 @@ unsafe fn recv_batch_linux(
         // Convert sockaddr_storage -> SocketAddr
         let ss = &addrs_raw[i];
         let sa = unsafe { &*(ss as *const _ as *const sockaddr) };
-        let addr = if sa.sa_family as i32 == AF_INET {
+        let addr = if sa.sa_family as i32 == AF_INET { 
             let sin = unsafe { &*(ss as *const _ as *const sockaddr_in) };
             let ip = std::net::Ipv4Addr::from(u32::from_be(sin.sin_addr.s_addr));
             let port = u16::from_be(sin.sin_port);
