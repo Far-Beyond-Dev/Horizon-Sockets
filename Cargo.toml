@@ -15,8 +15,8 @@ mio = { version = "1", features = ["net", "os-ext"], optional = true }
 # Platform bindings
 libc = { version = "0.2", features = ["extra_traits"] }
 
-# monoio on supported platforms (Linux, Windows, and BSD for testing)
-[target.'cfg(any(target_os = "linux", target_os = "windows", target_os = "freebsd"))'.dependencies]
+# monoio on platforms where it actually compiles without errors
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
 monoio = { version = "0.2", optional = true }
 
 [target.'cfg(windows)'.dependencies]
