@@ -171,19 +171,26 @@ impl Default for NetConfig {
     /// throughput, suitable for most applications:
     ///
     /// - TCP optimizations enabled (NODELAY, QUICKACK)
-    /// - 4MB socket buffers for good throughput
+    /// - Socket buffers: 4MB (Linux/Windows) or 64KB (BSD systems)
     /// - SO_REUSEPORT enabled for scalability
     /// - Dual-stack IPv6 support
     /// - Conservative polling timeout
     /// - No busy polling (suitable for shared systems)
     fn default() -> Self {
+        // BSD systems have lower socket buffer limits to avoid kernel memory exhaustion
+        #[cfg(any(target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))]
+        let default_buf_size = 64 * 1024; // 64KB for BSD systems
+        
+        #[cfg(not(any(target_os = "freebsd", target_os = "netbsd", target_os = "openbsd")))]
+        let default_buf_size = 4 << 20; // 4 MiB for other systems
+        
         Self {
             tcp_nodelay: true,
             tcp_quickack: true,
             reuse_port: true,
             busy_poll: None,
-            recv_buf: Some(4 << 20), // 4 MiB - increased from 1MB
-            send_buf: Some(4 << 20), // 4 MiB - increased from 1MB
+            recv_buf: Some(default_buf_size),
+            send_buf: Some(default_buf_size),
             tos: None,
             ipv6_only: Some(false), // Dual-stack by default
             hop_limit: None,
