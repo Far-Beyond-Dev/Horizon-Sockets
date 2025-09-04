@@ -1,5 +1,3 @@
-cargo-features = ["edition2024"]
-
 [package]
 name = "horizon_sockets"
 version = "0.1.0"
@@ -13,10 +11,13 @@ slab = { version = "0.4", optional = true }
 
 # Runtime back-ends
 mio = { version = "1", features = ["net", "os-ext"], optional = true }
-monoio = { version = "0.2", optional = true }
 
 # Platform bindings
 libc = { version = "0.2", features = ["extra_traits"] }
+
+# monoio on supported platforms (Linux, Windows, and BSD for testing)
+[target.'cfg(any(target_os = "linux", target_os = "windows", target_os = "freebsd"))'.dependencies]
+monoio = { version = "0.2", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59.0", features = [
@@ -31,10 +32,12 @@ windows-sys = { version = "0.59.0", features = [
 anyhow = "1"
 
 [features]
-# Default to the mio-based runtime which maps to epoll/kqueue/IOCP
-# Optionally enable the monoio runtime (io_uring on Linux, IOCP on Windows)
-# by adding `features = ["monoio-runtime"]` to your dependent crate.
-default = ["mio-runtime","monoio-runtime"]
+# Default features: mio everywhere, monoio on supported platforms
+default = ["mio-runtime", "monoio-runtime"]
+full = ["mio-runtime", "monoio-runtime"]
+# Explicitly enable monoio where it works
+linux-full = ["mio-runtime", "monoio-runtime"]
+windows-full = ["mio-runtime", "monoio-runtime"]
 
 mio-runtime = ["dep:mio", "dep:slab", "dep:log"]
 monoio-runtime = ["dep:monoio"]

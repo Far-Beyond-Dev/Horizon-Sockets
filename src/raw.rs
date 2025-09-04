@@ -180,8 +180,8 @@ cfg_if::cfg_if! {
             if rc != 0 { Err(io::Error::last_os_error()) } else { Ok(()) }
         }
 
-        pub unsafe fn udp_from_os(fd: RawFd) -> std::net::UdpSocket { std::net::UdpSocket::from_raw_fd(fd) }
-        pub unsafe fn tcp_listener_from_os(fd: RawFd) -> std::net::TcpListener { std::net::TcpListener::from_raw_fd(fd) }
+        pub unsafe fn udp_from_os(fd: RawFd) -> std::net::UdpSocket { unsafe { std::net::UdpSocket::from_raw_fd(fd) } }
+        pub unsafe fn tcp_listener_from_os(fd: RawFd) -> std::net::TcpListener { unsafe { std::net::TcpListener::from_raw_fd(fd) } }
 
     } else if #[cfg(windows)] {
         // Windows

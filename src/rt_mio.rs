@@ -79,12 +79,6 @@ impl Runtime {
         }
     }
 
-<<<<<<< HEAD
-    pub fn register_udp(&self, socket: &mut MioUdpSocket, token: Token, interest: Interest) -> io::Result<()> { self.poll.registry().register(socket, token, interest) }
-    pub fn register_tcp_listener(&self, l: &mut MioTcpListener, token: Token) -> io::Result<()> { self.poll.registry().register(l, token, Interest::READABLE) }
-    pub fn register_tcp_stream(&self, s: &mut MioTcpStream, token: Token, interest: Interest) -> io::Result<()> { self.poll.registry().register(s, token, interest) }
-}
-=======
     /// Runs the event loop with a custom timeout per iteration
     pub fn run_with_timeout<F: FnMut(&mio::event::Event)>(
         &mut self,
@@ -179,4 +173,3 @@ mod tests {
         assert!(result.is_ok());
     }
 }
->>>>>>> origin/main

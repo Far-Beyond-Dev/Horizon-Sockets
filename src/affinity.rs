@@ -165,7 +165,7 @@ pub fn get_numa_topology() -> Vec<Vec<usize>> {
 }
 
 // Unix/Linux implementation
-#[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn pin_to_cpu_unix(cpu: usize) -> io::Result<()> {
     use libc::{CPU_SET, CPU_ZERO, cpu_set_t, sched_setaffinity};
 
@@ -189,7 +189,38 @@ fn pin_to_cpu_unix(cpu: usize) -> io::Result<()> {
     Ok(())
 }
 
-#[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+// FreeBSD implementation  
+#[cfg(target_os = "freebsd")]
+fn pin_to_cpu_unix(cpu: usize) -> io::Result<()> {
+    use libc::{CPU_SET, CPU_ZERO, cpuset_t, cpuset_setaffinity};
+    
+    if cpu >= 1024 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "CPU number too large (max 1023)",
+        ));
+    }
+
+    unsafe {
+        let mut set: cpuset_t = std::mem::zeroed();
+        CPU_ZERO(&mut set);
+        CPU_SET(cpu, &mut set);
+
+        if cpuset_setaffinity(
+            libc::CPU_LEVEL_WHICH, 
+            libc::CPU_WHICH_PID, 
+            -1, 
+            std::mem::size_of::<cpuset_t>(), 
+            &set
+        ) != 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
 fn pin_to_cpus_unix(cpus: &[usize]) -> io::Result<()> {
     use libc::{CPU_SET, CPU_ZERO, cpu_set_t, sched_setaffinity};
 
@@ -212,6 +243,42 @@ fn pin_to_cpus_unix(cpus: &[usize]) -> io::Result<()> {
         }
 
         if sched_setaffinity(0, std::mem::size_of::<cpu_set_t>(), &set) != 0 {
+            return Err(io::Error::last_os_error());
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "freebsd")]
+fn pin_to_cpus_unix(cpus: &[usize]) -> io::Result<()> {
+    use libc::{CPU_SET, CPU_ZERO, cpuset_t, cpuset_setaffinity};
+
+    // Check CPU numbers are valid
+    for &cpu in cpus {
+        if cpu >= 1024 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("CPU number {} too large (max 1023)", cpu),
+            ));
+        }
+    }
+
+    unsafe {
+        let mut set: cpuset_t = std::mem::zeroed();
+        CPU_ZERO(&mut set);
+
+        for &cpu in cpus {
+            CPU_SET(cpu, &mut set);
+        }
+
+        if cpuset_setaffinity(
+            libc::CPU_LEVEL_WHICH, 
+            libc::CPU_WHICH_PID, 
+            -1, 
+            std::mem::size_of::<cpuset_t>(), 
+            &set
+        ) != 0 {
             return Err(io::Error::last_os_error());
         }
     }

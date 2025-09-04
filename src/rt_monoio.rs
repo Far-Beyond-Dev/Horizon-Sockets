@@ -30,6 +30,9 @@
 #[cfg(feature = "monoio-runtime")]
 mod rt_monoio {
     use std::io;
+    
+    // Only use cross-platform networking features from monoio
+    // Avoid filesystem operations that cause BSD compatibility issues
 
     /// High-performance async runtime using io_uring/IOCP
     ///
