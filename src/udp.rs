@@ -741,19 +741,17 @@ unsafe fn recv_batch_linux(
             iov_len: buf.len(),
         };
         iovecs[i] = iov;
-        hdrs[i].msg_hdr = msghdr {
-            msg_name: &mut addrs_raw[i] as *mut _ as *mut _,
-            msg_namelen: std::mem::size_of::<sockaddr_storage>() as _,
-            msg_iov: &mut iovecs[i] as *mut _,
-            msg_iovlen: 1,
-            msg_control: std::ptr::null_mut(),
-            msg_controllen: 0,
-            msg_flags: 0,
-        };
+        // Zeroed then filled field by field: musl's msghdr has private padding fields.
+        let mut hdr: msghdr = unsafe { std::mem::zeroed() };
+        hdr.msg_name = &mut addrs_raw[i] as *mut _ as *mut _;
+        hdr.msg_namelen = std::mem::size_of::<sockaddr_storage>() as _;
+        hdr.msg_iov = &mut iovecs[i] as *mut _;
+        hdr.msg_iovlen = 1;
+        hdrs[i].msg_hdr = hdr;
         hdrs[i].msg_len = 0;
     }
 
-    let rc = unsafe { recvmmsg(fd, hdrs.as_mut_ptr(), max as u32, MSG_DONTWAIT, std::ptr::null_mut()) };
+    let rc = unsafe { recvmmsg(fd, hdrs.as_mut_ptr(), max as _, MSG_DONTWAIT as _, std::ptr::null_mut()) };
     if rc < 0 { return Err(std::io::Error::last_os_error()); }
     let n = rc as usize;
 
@@ -826,6 +824,47 @@ mod tests {
 
         let result = socket.recv_batch(&mut bufs, &mut addrs);
         assert_eq!(result.unwrap(), 0);
+    }
+
+    #[test]
+    fn test_recv_batch_returns_payloads_and_sources() {
+        let mut config = NetConfig::default();
+        config.ipv6_only = None;
+        let receiver = Udp::bind("127.0.0.1:0".parse().unwrap(), &config).unwrap();
+        let sender = Udp::bind("127.0.0.1:0".parse().unwrap(), &config).unwrap();
+        let dest = receiver.inner.local_addr().unwrap();
+        let source = sender.inner.local_addr().unwrap();
+
+        let payloads: [&[u8]; 3] = [b"first", b"second", b"third"];
+        for payload in payloads {
+            sender.send_to(payload, dest).unwrap();
+        }
+
+        let mut bufs: Vec<Vec<u8>> = vec![Vec::new(); 4];
+        let mut addrs: Vec<SocketAddr> = vec!["0.0.0.0:0".parse().unwrap(); 4];
+        let mut received: Vec<(Vec<u8>, SocketAddr)> = Vec::new();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while received.len() < payloads.len() && std::time::Instant::now() < deadline {
+            let n = socket_recv(&receiver, &mut bufs, &mut addrs);
+            for i in 0..n {
+                received.push((bufs[i].clone(), addrs[i]));
+                bufs[i].clear();
+            }
+        }
+
+        assert_eq!(received.len(), payloads.len());
+        for ((data, addr), expected) in received.iter().zip(payloads) {
+            assert_eq!(data.as_slice(), expected);
+            assert_eq!(*addr, source);
+        }
+    }
+
+    fn socket_recv(socket: &Udp, bufs: &mut [Vec<u8>], addrs: &mut [SocketAddr]) -> usize {
+        match socket.recv_batch(bufs, addrs) {
+            Ok(n) => n,
+            Err(e) if e.kind() == io::ErrorKind::WouldBlock => 0,
+            Err(e) => panic!("recv_batch failed: {e}"),
+        }
     }
 
     #[test]
